@@ -2,16 +2,36 @@ import { FastifyInstance } from 'fastify';
 import { fetchAllFeeds, fetchFeed } from '../../fetcher';
 import { analyzeUnprocessedArticles, analyzeArticle } from '../../analyzer/analyzer';
 import { sendDailyEmail, sendAllAnalyzedEmail } from '../../mailer';
+import { refreshAllMps } from '../../sources/wemp-refresh';
 
 // 简单的任务状态追踪
 const taskStatus = {
+  refresh: { running: false, lastRun: null as string | null, lastResult: null as any },
   fetch: { running: false, lastRun: null as string | null, lastResult: null as any },
   analyze: { running: false, lastRun: null as string | null, lastResult: null as any },
+  pipeline: { running: false, lastRun: null as string | null, lastResult: null as any },
 };
 
 export async function taskRoutes(app: FastifyInstance): Promise<void> {
   // 查看任务状态
   app.get('/tasks/status', async () => taskStatus);
+
+  // 手动触发 we-mp-rss 刷新
+  app.post('/tasks/refresh', async (req, reply) => {
+    if (taskStatus.refresh.running) {
+      return reply.status(409).send({ error: '刷新任务正在运行中' });
+    }
+
+    taskStatus.refresh.running = true;
+    taskStatus.refresh.lastRun = new Date().toISOString();
+
+    refreshAllMps()
+      .then((result) => { taskStatus.refresh.lastResult = result; })
+      .catch((err) => { taskStatus.refresh.lastResult = { error: String(err) }; })
+      .finally(() => { taskStatus.refresh.running = false; });
+
+    return { success: true, message: 'we-mp-rss 刷新任务已启动' };
+  });
 
   // 手动触发全量抓取
   app.post('/tasks/fetch', async (req, reply) => {
@@ -22,17 +42,10 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     taskStatus.fetch.running = true;
     taskStatus.fetch.lastRun = new Date().toISOString();
 
-    // 异步执行，不阻塞响应
     fetchAllFeeds()
-      .then((result) => {
-        taskStatus.fetch.lastResult = result;
-      })
-      .catch((err) => {
-        taskStatus.fetch.lastResult = { error: String(err) };
-      })
-      .finally(() => {
-        taskStatus.fetch.running = false;
-      });
+      .then((result) => { taskStatus.fetch.lastResult = result; })
+      .catch((err) => { taskStatus.fetch.lastResult = { error: String(err) }; })
+      .finally(() => { taskStatus.fetch.running = false; });
 
     return { success: true, message: '抓取任务已启动' };
   });
@@ -57,15 +70,9 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     taskStatus.analyze.lastRun = new Date().toISOString();
 
     analyzeUnprocessedArticles()
-      .then((result) => {
-        taskStatus.analyze.lastResult = result;
-      })
-      .catch((err) => {
-        taskStatus.analyze.lastResult = { error: String(err) };
-      })
-      .finally(() => {
-        taskStatus.analyze.running = false;
-      });
+      .then((result) => { taskStatus.analyze.lastResult = result; })
+      .catch((err) => { taskStatus.analyze.lastResult = { error: String(err) }; })
+      .finally(() => { taskStatus.analyze.running = false; });
 
     return { success: true, message: '分析任务已启动' };
   });
@@ -78,6 +85,59 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       return reply.status(500).send({ error: String(err) });
     }
+  });
+
+  // 一键执行完整流水线：刷新 → 抓取 → 分析 → 邮件
+  app.post('/tasks/pipeline', async (req, reply) => {
+    if (taskStatus.pipeline.running) {
+      return reply.status(409).send({ error: '流水线正在运行中' });
+    }
+
+    taskStatus.pipeline.running = true;
+    taskStatus.pipeline.lastRun = new Date().toISOString();
+
+    (async () => {
+      const result: any = { steps: [] };
+      try {
+        // Step 1: 刷新 we-mp-rss
+        console.log('[Pipeline] Step 1: 刷新 we-mp-rss');
+        const refreshResult = await refreshAllMps();
+        result.steps.push({ step: 'refresh', ...refreshResult });
+
+        // 等待 30 秒让 we-mp-rss 完成采集
+        console.log('[Pipeline] 等待 30 秒...');
+        await new Promise((r) => setTimeout(r, 30000));
+
+        // Step 2: 抓取到本地
+        console.log('[Pipeline] Step 2: 抓取文章');
+        const fetchResult = await fetchAllFeeds();
+        result.steps.push({ step: 'fetch', ...fetchResult });
+
+        // Step 3: LLM 分析
+        console.log('[Pipeline] Step 3: LLM 分析');
+        const analyzeResult = await analyzeUnprocessedArticles();
+        result.steps.push({ step: 'analyze', ...analyzeResult });
+
+        // Step 4: 发送邮件（如果有新分析的文章）
+        if (analyzeResult.success > 0) {
+          console.log('[Pipeline] Step 4: 发送邮件');
+          await sendDailyEmail();
+          result.steps.push({ step: 'email', sent: true });
+        }
+
+        result.success = true;
+        console.log('[Pipeline] 完成');
+      } catch (err) {
+        result.success = false;
+        result.error = String(err);
+        console.error('[Pipeline] 失败:', err);
+      }
+      taskStatus.pipeline.lastResult = result;
+    })().finally(() => {
+      taskStatus.pipeline.running = false;
+    });
+
+    return { success: true, message: '完整流水线已启动（刷新→抓取→分析→邮件）' };
   });
 
   // 手动发送邮件（今日分析结果）

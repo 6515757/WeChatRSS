@@ -17,12 +17,15 @@ export const config = {
     host: process.env.HOST || '0.0.0.0',
   },
   cron: {
-    fetch: process.env.FETCH_CRON || '0 8,18 * * *',
-    analyze: process.env.ANALYZE_CRON || '30 8,18 * * *',
+    refreshRss: process.env.REFRESH_RSS_CRON || '30 8 * * *',
+    fetch: process.env.FETCH_CRON || '35 8 * * *',
+    analyze: process.env.ANALYZE_CRON || '40 8 * * *',
     dailyReport: process.env.DAILY_REPORT_CRON || '0 20 * * *',
   },
   weMpRss: {
     url: process.env.WE_MP_RSS_URL || 'http://localhost:8001',
+    user: process.env.WE_MP_RSS_USER || 'admin',
+    password: process.env.WE_MP_RSS_PASSWORD || 'admin@123',
   },
   mail: {
     host: process.env.MAIL_HOST || 'smtp.qq.com',
