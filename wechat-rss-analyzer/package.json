@@ -1,0 +1,35 @@
+{
+  "name": "wechat-rss-analyzer",
+  "version": "1.0.0",
+  "description": "微信公众号文章自动抓取与大模型分析系统",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@types/nodemailer": "^8.0.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.30.10",
+    "fastify": "^4.27.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^8.0.7",
+    "openai": "^4.47.1",
+    "pino-pretty": "^11.0.0",
+    "rss-parser": "^3.13.0",
+    "sql.js": "^1.10.3",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/node-cron": "^3.0.11",
+    "@types/uuid": "^9.0.8",
+    "drizzle-kit": "^0.21.4",
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.5"
+  }
+}

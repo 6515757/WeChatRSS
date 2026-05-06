@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment & secrets
+.env
+*.lic
+.secret_key
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+
+# we-mp-rss runtime data
+we-mp-rss-data/cache/
+we-mp-rss-data/redis/
+we-mp-rss-data/files/
+we-mp-rss-data/db.db
+
+# Analyzer runtime data
+wechat-rss-analyzer/data/
+analyzer-data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Kiro
+.kiro/
+.tools/
+
+# Logs
+*.log

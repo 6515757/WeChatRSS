@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # we-mp-rss：微信公众号 RSS 数据源
+  we-mp-rss:
+    image: ghcr.io/rachelos/we-mp-rss:latest
+    container_name: we-mp-rss
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./we-mp-rss-data:/app/data
+    restart: unless-stopped
+
+  # 分析后端
+  analyzer:
+    build:
+      context: ./wechat-rss-analyzer
+    container_name: wechat-analyzer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./analyzer-data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/wechat-rss.db
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.ikuncode.cc/v1}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-6}
+      - WE_MP_RSS_URL=http://we-mp-rss:8001
+      - PORT=3000
+    depends_on:
+      - we-mp-rss
+    restart: unless-stopped
+
+volumes:
+  we-mp-rss-data:
+  analyzer-data:

@@ -1,0 +1,98 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "0000_initial",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "feeds": {
+      "name": "feeds",
+      "columns": {
+        "id": { "name": "id", "type": "text", "primaryKey": true, "notNull": true },
+        "name": { "name": "name", "type": "text", "notNull": true },
+        "url": { "name": "url", "type": "text", "notNull": true },
+        "source_type": { "name": "source_type", "type": "text", "notNull": true, "default": "'generic'" },
+        "enabled": { "name": "enabled", "type": "integer", "notNull": true, "default": true },
+        "last_fetched_at": { "name": "last_fetched_at", "type": "text" },
+        "created_at": { "name": "created_at", "type": "text", "notNull": true }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "articles": {
+      "name": "articles",
+      "columns": {
+        "id": { "name": "id", "type": "text", "primaryKey": true, "notNull": true },
+        "feed_id": { "name": "feed_id", "type": "text", "notNull": true },
+        "title": { "name": "title", "type": "text", "notNull": true },
+        "url": { "name": "url", "type": "text", "notNull": true },
+        "content": { "name": "content", "type": "text" },
+        "author": { "name": "author", "type": "text" },
+        "published_at": { "name": "published_at", "type": "text" },
+        "fetched_at": { "name": "fetched_at", "type": "text", "notNull": true }
+      },
+      "indexes": {
+        "articles_url_unique": { "name": "articles_url_unique", "columns": ["url"], "isUnique": true }
+      },
+      "foreignKeys": {
+        "articles_feed_id_feeds_id_fk": {
+          "name": "articles_feed_id_feeds_id_fk",
+          "tableFrom": "articles",
+          "tableTo": "feeds",
+          "columnsFrom": ["feed_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "analyses": {
+      "name": "analyses",
+      "columns": {
+        "id": { "name": "id", "type": "text", "primaryKey": true, "notNull": true },
+        "article_id": { "name": "article_id", "type": "text", "notNull": true },
+        "summary": { "name": "summary", "type": "text" },
+        "topics": { "name": "topics", "type": "text" },
+        "key_points": { "name": "key_points", "type": "text" },
+        "importance_score": { "name": "importance_score", "type": "real" },
+        "raw_response": { "name": "raw_response", "type": "text" },
+        "analyzed_at": { "name": "analyzed_at", "type": "text", "notNull": true }
+      },
+      "indexes": {
+        "analyses_article_id_unique": { "name": "analyses_article_id_unique", "columns": ["article_id"], "isUnique": true }
+      },
+      "foreignKeys": {
+        "analyses_article_id_articles_id_fk": {
+          "name": "analyses_article_id_articles_id_fk",
+          "tableFrom": "analyses",
+          "tableTo": "articles",
+          "columnsFrom": ["article_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "reports": {
+      "name": "reports",
+      "columns": {
+        "id": { "name": "id", "type": "text", "primaryKey": true, "notNull": true },
+        "title": { "name": "title", "type": "text", "notNull": true },
+        "type": { "name": "type", "type": "text", "notNull": true },
+        "content": { "name": "content", "type": "text", "notNull": true },
+        "period_start": { "name": "period_start", "type": "text", "notNull": true },
+        "period_end": { "name": "period_end", "type": "text", "notNull": true },
+        "created_at": { "name": "created_at", "type": "text", "notNull": true }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "_meta": { "schemas": {}, "tables": {}, "columns": {} }
+}

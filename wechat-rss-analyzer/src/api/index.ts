@@ -1,0 +1,51 @@
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import { config } from '../config';
+import { feedRoutes } from './routes/feeds';
+import { articleRoutes } from './routes/articles';
+import { reportRoutes } from './routes/reports';
+import { taskRoutes } from './routes/tasks';
+
+export async function createServer() {
+  const app = Fastify({
+    logger: {
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+        },
+      },
+    },
+  });
+
+  // CORS
+  await app.register(cors, { origin: true });
+
+  // 健康检查
+  app.get('/health', async () => ({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+  }));
+
+  // 注册路由（统一 /api 前缀）
+  await app.register(feedRoutes, { prefix: '/api' });
+  await app.register(articleRoutes, { prefix: '/api' });
+  await app.register(reportRoutes, { prefix: '/api' });
+  await app.register(taskRoutes, { prefix: '/api' });
+
+  return app;
+}
+
+export async function startServer() {
+  const app = await createServer();
+
+  await app.listen({
+    port: config.server.port,
+    host: config.server.host,
+  });
+
+  console.log(`🚀 服务已启动: http://localhost:${config.server.port}`);
+  return app;
+}
