@@ -82,23 +82,9 @@ function renderTaskStatus(data) {
     }
   });
 
-  // Pipeline status detail
+  // Pipeline status
   const ps = data.pipeline;
-  if (ps && ps.running) {
-    const el = document.getElementById('pipeline-status');
-    el.classList.remove('hidden');
-    el.textContent = '流水线运行中，请稍候...';
-  } else if (ps && ps.lastResult && ps.lastResult.steps) {
-    const el = document.getElementById('pipeline-status');
-    el.classList.remove('hidden');
-    const steps = ps.lastResult.steps.map(s => {
-      const icon = s.error ? '✗' : '✓';
-      const color = s.error ? 'text-red-500' : 'text-green-600';
-      const label = { refresh: '刷新', fetch: '抓取', analyze: '分析', email: '邮件' }[s.step] || s.step;
-      return `<span class="${color}">${icon} ${label}</span>`;
-    }).join(' → ');
-    el.innerHTML = steps;
-  }
+  renderPipelineProgress(ps);
 }
 
 // ─── Task Actions ─────────────────────────────────────────────────────────────
@@ -110,13 +96,102 @@ async function runPipeline() {
   try {
     await post('/tasks/pipeline');
     showToast('流水线已启动');
-    setTimeout(refreshStatus, 1000);
+    // 开始快速轮询进度
+    startPipelinePoll();
   } catch (e) {
     showToast('启动失败: ' + e.message, 'error');
-  } finally {
     btn.disabled = false;
-    btn.textContent = '▶ 一键执行';
+    btn.textContent = '执行';
   }
+}
+
+let pipelinePollTimer = null;
+function startPipelinePoll() {
+  stopPipelinePoll();
+  pipelinePollTimer = setInterval(async () => {
+    try {
+      const data = await get('/tasks/status');
+      renderPipelineProgress(data.pipeline);
+      if (!data.pipeline.running) {
+        stopPipelinePoll();
+        const btn = document.getElementById('btn-pipeline');
+        btn.disabled = false;
+        btn.textContent = '执行';
+      }
+    } catch (e) { /* ignore */ }
+  }, 2000);
+}
+
+function stopPipelinePoll() {
+  if (pipelinePollTimer) { clearInterval(pipelinePollTimer); pipelinePollTimer = null; }
+}
+
+const STEP_LABELS = { refresh: '刷新公众号', sync: '同步订阅源', fetch: '抓取文章', analyze: 'LLM 分析', email: '发送邮件' };
+const STEP_ORDER = ['refresh', 'sync', 'fetch', 'analyze', 'email'];
+
+function renderPipelineProgress(ps) {
+  const el = document.getElementById('pipeline-status');
+  if (!ps) { el.classList.add('hidden'); return; }
+
+  el.classList.remove('hidden');
+
+  if (ps.running && (!ps.lastResult || !ps.lastResult.steps || ps.lastResult.steps.length === 0)) {
+    el.innerHTML = renderStepTimeline([], true);
+    return;
+  }
+
+  if (ps.running && ps.lastResult && ps.lastResult.steps) {
+    el.innerHTML = renderStepTimeline(ps.lastResult.steps, true);
+    return;
+  }
+
+  if (!ps.running && ps.lastResult) {
+    if (ps.lastResult.error) {
+      el.innerHTML = '<div style="color:#fca5a5;">✗ ' + ps.lastResult.error.slice(0, 100) + '</div>';
+    } else {
+      el.innerHTML = renderStepTimeline(ps.lastResult.steps || [], false);
+    }
+    return;
+  }
+
+  el.classList.add('hidden');
+}
+
+function renderStepTimeline(completedSteps, isRunning) {
+  const doneNames = completedSteps.map(s => s.step);
+  let currentStep = null;
+  if (isRunning) {
+    // 找到下一个未完成的步骤
+    currentStep = STEP_ORDER.find(s => !doneNames.includes(s)) || null;
+  }
+
+  return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+    STEP_ORDER.map(step => {
+      const done = doneNames.includes(step);
+      const active = step === currentStep;
+      const label = STEP_LABELS[step] || step;
+
+      if (done) {
+        const s = completedSteps.find(x => x.step === step);
+        const detail = getStepDetail(s);
+        return `<span style="color:#86efac;font-size:12px;" title="${detail}">✓ ${label}</span><span style="color:rgba(255,255,255,0.3);font-size:10px;">→</span>`;
+      } else if (active) {
+        return `<span style="color:#fff;font-size:12px;" class="spinner">⟳</span><span style="color:#fff;font-size:12px;font-weight:500;">${label}</span><span style="color:rgba(255,255,255,0.3);font-size:10px;">→</span>`;
+      } else {
+        return `<span style="color:rgba(255,255,255,0.4);font-size:12px;">${label}</span><span style="color:rgba(255,255,255,0.2);font-size:10px;">→</span>`;
+      }
+    }).join('').replace(/→<\/span>$/, '</span>') +
+    '</div>';
+}
+
+function getStepDetail(s) {
+  if (!s) return '';
+  if (s.step === 'refresh') return `${s.success || 0}/${s.total || 0} 个公众号`;
+  if (s.step === 'sync') return `新增 ${s.added || 0}，已有 ${s.existing || 0}`;
+  if (s.step === 'fetch') return `新增 ${s.newArticles || 0} 篇`;
+  if (s.step === 'analyze') return `成功 ${s.success || 0}，失败 ${s.failed || 0}`;
+  if (s.step === 'email') return s.sent ? '已发送' : '';
+  return '';
 }
 
 async function runTask(type) {
