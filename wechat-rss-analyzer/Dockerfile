@@ -10,6 +10,9 @@ RUN npm install --production=false
 COPY . .
 RUN npm run build
 
+# 复制静态文件到 dist
+RUN cp -r src/public dist/public
+
 # 生产依赖
 RUN npm prune --production
 
