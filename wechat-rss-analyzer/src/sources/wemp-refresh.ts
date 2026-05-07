@@ -4,11 +4,11 @@ import { config } from '../config';
 async function getToken(): Promise<string> {
   const res = await fetch(`${config.weMpRss.url}/api/v1/wx/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
       username: config.weMpRss.user,
       password: config.weMpRss.password,
-    }),
+    }).toString(),
   });
 
   if (!res.ok) {
@@ -34,7 +34,7 @@ async function getMpList(token: string): Promise<Array<{ mp_id: string; mp_name:
   }
 
   const data = (await res.json()) as any;
-  const items = data.data?.items || data.data || data.items || data || [];
+  const items = data.data?.list || data.data?.items || data.data || data.items || data || [];
   return items.map((item: any) => ({
     mp_id: item.mp_id || item.id || '',
     mp_name: item.mp_name || item.name || '',

@@ -2,7 +2,6 @@ import cron from 'node-cron';
 import { config } from '../config';
 import { fetchAllFeeds } from '../fetcher';
 import { analyzeUnprocessedArticles } from '../analyzer/analyzer';
-import { generateReport } from '../reporter/reporter';
 import { sendDailyEmail } from '../mailer';
 import { refreshAllMps } from '../sources/wemp-refresh';
 
@@ -41,19 +40,8 @@ export function startScheduler(): void {
     }
   });
 
-  // 4. 日报生成（20:00）
-  cron.schedule(config.cron.dailyReport, async () => {
-    console.log('[Scheduler] Report generation started ' + new Date().toISOString());
-    try {
-      await generateReport('daily');
-    } catch (err) {
-      console.error('[Scheduler] Report failed:', err);
-    }
-  });
-
   console.log('Scheduler started:');
   console.log('  Refresh: ' + config.cron.refreshRss);
   console.log('  Fetch:   ' + config.cron.fetch);
   console.log('  Analyze: ' + config.cron.analyze);
-  console.log('  Report:  ' + config.cron.dailyReport);
 }

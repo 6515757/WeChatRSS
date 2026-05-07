@@ -31,7 +31,6 @@ function renderArticle(a: EmailArticle): string {
     : '';
 
   const summaryHtml = a.summary ? renderLabel('核心内容', a.summary) : '';
-  const keyPointsHtml = a.keyPoints.length > 0 ? renderLabel('关键观点', a.keyPoints.join('；') + '。') : '';
   const keyDataHtml = a.keyData.length > 0 ? renderLabel('关键数据', a.keyData.join('；') + '。') : '';
 
   return `
@@ -39,7 +38,6 @@ function renderArticle(a: EmailArticle): string {
     <div style="font-weight:700;font-size:14px;color:#1a202c;margin-bottom:10px;line-height:1.5;">${a.title}</div>
     ${tagsHtml}
     ${summaryHtml}
-    ${keyPointsHtml}
     ${keyDataHtml}
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f3f7;">
       <a href="${a.url}" style="color:#3182ce;font-size:12px;text-decoration:none;font-weight:500;">&#128279; 阅读原文</a>

@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import staticPlugin from '@fastify/static';
+import path from 'path';
 import { config } from '../config';
 import { feedRoutes } from './routes/feeds';
 import { articleRoutes } from './routes/articles';
@@ -22,6 +24,12 @@ export async function createServer() {
 
   // CORS
   await app.register(cors, { origin: true });
+
+  // 静态文件（UI）
+  await app.register(staticPlugin, {
+    root: path.join(__dirname, '../public'),
+    prefix: '/',
+  });
 
   // 健康检查
   app.get('/health', async () => ({
