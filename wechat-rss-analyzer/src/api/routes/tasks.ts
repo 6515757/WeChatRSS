@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { fetchAllFeeds, fetchFeed } from '../../fetcher';
 import { analyzeUnprocessedArticles, analyzeArticle } from '../../analyzer/analyzer';
 import { sendDailyEmail, sendAllAnalyzedEmail } from '../../mailer';
-import { refreshAllMps } from '../../sources/wemp-refresh';
+import { refreshAllMps, syncFeedsFromWeMpRss } from '../../sources/wemp-refresh';
 
 // 简单的任务状态追踪
 const taskStatus = {
@@ -108,8 +108,13 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
         console.log('[Pipeline] 等待 30 秒...');
         await new Promise((r) => setTimeout(r, 30000));
 
-        // Step 2: 抓取到本地
-        console.log('[Pipeline] Step 2: 抓取文章');
+        // Step 2: 同步订阅源
+        console.log('[Pipeline] Step 2: 同步订阅源');
+        const syncResult = await syncFeedsFromWeMpRss();
+        result.steps.push({ step: 'sync', ...syncResult });
+
+        // Step 3: 抓取到本地
+        console.log('[Pipeline] Step 3: 抓取文章');
         const fetchResult = await fetchAllFeeds();
         result.steps.push({ step: 'fetch', ...fetchResult });
 

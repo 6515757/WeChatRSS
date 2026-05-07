@@ -3,7 +3,7 @@ import { config } from '../config';
 import { fetchAllFeeds } from '../fetcher';
 import { analyzeUnprocessedArticles } from '../analyzer/analyzer';
 import { sendDailyEmail } from '../mailer';
-import { refreshAllMps } from '../sources/wemp-refresh';
+import { refreshAllMps, syncFeedsFromWeMpRss } from '../sources/wemp-refresh';
 
 export function startScheduler(): void {
   // 1. 触发 we-mp-rss 刷新文章（8:30）
@@ -20,6 +20,8 @@ export function startScheduler(): void {
   cron.schedule(config.cron.fetch, async () => {
     console.log('[Scheduler] Fetch started ' + new Date().toISOString());
     try {
+      // 先同步订阅源
+      await syncFeedsFromWeMpRss();
       await fetchAllFeeds();
     } catch (err) {
       console.error('[Scheduler] Fetch failed:', err);

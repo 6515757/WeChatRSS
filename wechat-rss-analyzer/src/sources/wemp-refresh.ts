@@ -91,3 +91,61 @@ export async function refreshAllMps(): Promise<{
   console.log(`[Refresh] 完成: success=${success} failed=${failed}`);
   return { total: mpList.length, success, failed };
 }
+
+// 自动同步 we-mp-rss 的公众号到 analyzer 的 feeds 表
+export async function syncFeedsFromWeMpRss(): Promise<{
+  total: number;
+  added: number;
+  existing: number;
+}> {
+  const { eq } = await import('drizzle-orm');
+  const { v4: uuidv4 } = await import('uuid');
+  const { getDb, saveDatabaseSync } = await import('../db');
+  const { feeds } = await import('../db/schema');
+
+  console.log('[Sync] 同步 we-mp-rss 公众号到 feeds...');
+
+  const token = await getToken();
+  const mpList = await getMpList(token);
+
+  if (mpList.length === 0) {
+    console.log('[Sync] we-mp-rss 没有订阅的公众号');
+    return { total: 0, added: 0, existing: 0 };
+  }
+
+  const db = getDb();
+  let added = 0;
+  let existing = 0;
+
+  for (const mp of mpList) {
+    const rssUrl = `${config.weMpRss.url}/rss/${mp.mp_id}`;
+
+    // 检查是否已存在（按 URL 匹配）
+    const existingFeed = await db
+      .select({ id: feeds.id })
+      .from(feeds)
+      .where(eq(feeds.url, rssUrl))
+      .limit(1);
+
+    if (existingFeed.length > 0) {
+      existing++;
+      continue;
+    }
+
+    // 添加新的 feed
+    await db.insert(feeds).values({
+      id: uuidv4(),
+      name: mp.mp_name,
+      url: rssUrl,
+      sourceType: 'we-mp-rss',
+      enabled: true,
+      createdAt: new Date().toISOString(),
+    });
+    added++;
+    console.log(`[Sync] + ${mp.mp_name}`);
+  }
+
+  saveDatabaseSync();
+  console.log(`[Sync] 完成: total=${mpList.length} added=${added} existing=${existing}`);
+  return { total: mpList.length, added, existing };
+}
