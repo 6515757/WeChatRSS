@@ -5,8 +5,9 @@ services:
   we-mp-rss:
     image: ghcr.io/rachelos/we-mp-rss:latest
     container_name: we-mp-rss
+    # 仅绑本机，公网经 nginx 反代访问
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - ./we-mp-rss-data:/app/data
     restart: unless-stopped
@@ -16,8 +17,9 @@ services:
     build:
       context: ./wechat-rss-analyzer
     container_name: wechat-analyzer
+    # 仅绑本机，公网经 nginx 反代访问
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./analyzer-data:/app/data
     environment:
