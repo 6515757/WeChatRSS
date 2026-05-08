@@ -53,8 +53,9 @@ export async function analyzeArticle(articleId: string): Promise<void> {
 
   const prompt = buildArticleAnalysisPrompt(article.title, article.content);
 
+  let rawResponse = '';
   try {
-    const rawResponse = await llmClient.chat(ARTICLE_ANALYSIS_SYSTEM, prompt);
+    rawResponse = await llmClient.chat(ARTICLE_ANALYSIS_SYSTEM, prompt);
     const result = llmClient.parseJSON<AnalysisResult>(rawResponse);
 
     const newAnalysis: NewAnalysis = {
@@ -73,7 +74,11 @@ export async function analyzeArticle(articleId: string): Promise<void> {
     saveDatabaseSync();
     console.log('Analysis done: ' + article.title);
   } catch (err) {
-    console.error('Analysis failed: ' + article.title, err);
+    // 打印更完整的上下文，便于排查（包含 LLM 原文的前 1500 字）
+    const snippet = rawResponse ? rawResponse.slice(0, 1500) : '(no rawResponse)';
+    console.error(
+      'Analysis failed: ' + article.title + '\nerror=' + (err as Error).message + '\nraw=\n' + snippet
+    );
     try {
       await db.insert(analyses).values({
         id: uuidv4(),
@@ -83,7 +88,9 @@ export async function analyzeArticle(articleId: string): Promise<void> {
         keyPoints: '[]',
         keyData: '[]',
         importanceScore: 0,
-        rawResponse: String(err),
+        // 同时保留 LLM 原始输出 + 错误信息，方便后续 SQL 查询定位
+        rawResponse:
+          '[ERROR] ' + (err as Error).message + '\n[RAW]\n' + (rawResponse || '(empty)'),
         analyzedAt: new Date().toISOString(),
       });
       saveDatabaseSync();
