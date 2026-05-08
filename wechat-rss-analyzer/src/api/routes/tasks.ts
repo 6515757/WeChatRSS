@@ -1,8 +1,83 @@
 import { FastifyInstance } from 'fastify';
+import { sql } from 'drizzle-orm';
 import { fetchAllFeeds, fetchFeed } from '../../fetcher';
 import { analyzeUnprocessedArticles, analyzeArticle } from '../../analyzer/analyzer';
 import { sendDailyEmail, sendAllAnalyzedEmail } from '../../mailer';
 import { refreshAllMps, syncFeedsFromWeMpRss } from '../../sources/wemp-refresh';
+import { getDb } from '../../db';
+import { articles } from '../../db/schema';
+
+// 一个文章算「正文齐」的阈值；跟 analyzer.ts 中的 MIN_CONTENT_LEN 保持一致
+const MIN_CONTENT_LEN = 500;
+
+// 查询「在 sinceIso 之后入库且 content < MIN_CONTENT_LEN」的文章数
+async function countShortNewArticles(sinceIso: string): Promise<number> {
+  const db = getDb();
+  const rows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(articles)
+    .where(
+      sql`${articles.fetchedAt} >= ${sinceIso} AND COALESCE(length(${articles.content}), 0) < ${MIN_CONTENT_LEN}`,
+    );
+  return Number(rows[0]?.count ?? 0);
+}
+
+interface PollFetchOptions {
+  pipelineStartIso: string;
+  maxWaitMs?: number;        // 硬上限，超了就不等
+  intervalMs?: number;       // 每轮间隔
+  noProgressRounds?: number; // 连续 N 轮「短文章数」没变化就认为源端到头了
+}
+
+/**
+ * 轮询抓取直到所有新文章正文都足够长。
+ * 返回累计 fetch 轮数 + 最终仍未齐的文章数。
+ */
+async function pollFetchUntilReady(opts: PollFetchOptions): Promise<{
+  rounds: number;
+  finalShort: number;
+  totalNew: number;
+  reason: 'all-ready' | 'no-progress' | 'timeout';
+}> {
+  const maxWait = opts.maxWaitMs ?? 8 * 60 * 1000; // 8 分钟
+  const interval = opts.intervalMs ?? 30 * 1000;    // 30 秒
+  const noProgressLimit = opts.noProgressRounds ?? 3;
+
+  const startMs = Date.now();
+  let rounds = 0;
+  let totalNew = 0;
+  let lastShort: number | null = null;
+  let noProgressCount = 0;
+
+  while (true) {
+    rounds++;
+    const result = await fetchAllFeeds();
+    totalNew += result.newArticles;
+
+    const short = await countShortNewArticles(opts.pipelineStartIso);
+    console.log(
+      `[Pipeline] fetch round ${rounds}: new=${result.newArticles}, 本轮后仍短的文章=${short}`,
+    );
+
+    if (short === 0) return { rounds, finalShort: 0, totalNew, reason: 'all-ready' };
+
+    if (lastShort !== null && short === lastShort) noProgressCount++;
+    else noProgressCount = 0;
+    lastShort = short;
+
+    if (noProgressCount >= noProgressLimit) {
+      console.log(`[Pipeline] 连续 ${noProgressCount} 轮无进展，放弃等待`);
+      return { rounds, finalShort: short, totalNew, reason: 'no-progress' };
+    }
+
+    if (Date.now() - startMs + interval > maxWait) {
+      console.log('[Pipeline] 达到最大等待时长，停止轮询');
+      return { rounds, finalShort: short, totalNew, reason: 'timeout' };
+    }
+
+    await new Promise((r) => setTimeout(r, interval));
+  }
+}
 
 // 简单的任务状态追踪
 const taskStatus = {
@@ -98,34 +173,37 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
 
     (async () => {
       const result: any = { steps: [] };
+      const pipelineStartIso = new Date().toISOString();
       try {
         // Step 1: 刷新 we-mp-rss
         console.log('[Pipeline] Step 1: 刷新 we-mp-rss');
         const refreshResult = await refreshAllMps();
         result.steps.push({ step: 'refresh', ...refreshResult });
 
-        // 等待 30 秒让 we-mp-rss 完成采集
-        console.log('[Pipeline] 等待 30 秒...');
-        await new Promise((r) => setTimeout(r, 30000));
-
-        // Step 2: 同步订阅源
+        // Step 2: 同步订阅源（一次就够，与正文无关）
         console.log('[Pipeline] Step 2: 同步订阅源');
         const syncResult = await syncFeedsFromWeMpRss();
         result.steps.push({ step: 'sync', ...syncResult });
 
-        // Step 3: 抓取到本地
-        console.log('[Pipeline] Step 3: 抓取文章');
-        const fetchResult = await fetchAllFeeds();
-        result.steps.push({ step: 'fetch', ...fetchResult });
+        // Step 3: 轮询 fetch，直到全部新文章 content 达标、或无进展、或超时
+        console.log('[Pipeline] Step 3: 轮询抓取直到正文齐');
+        const pollRes = await pollFetchUntilReady({ pipelineStartIso });
+        result.steps.push({
+          step: 'fetch',
+          newArticles: pollRes.totalNew,
+          rounds: pollRes.rounds,
+          stillShort: pollRes.finalShort,
+          reason: pollRes.reason,
+        });
 
-        // Step 3: LLM 分析
-        console.log('[Pipeline] Step 3: LLM 分析');
+        // Step 4: LLM 分析
+        console.log('[Pipeline] Step 4: LLM 分析');
         const analyzeResult = await analyzeUnprocessedArticles();
         result.steps.push({ step: 'analyze', ...analyzeResult });
 
-        // Step 4: 发送邮件（如果有新分析的文章）
+        // Step 5: 发送邮件（如果有新分析的文章）
         if (analyzeResult.success > 0) {
-          console.log('[Pipeline] Step 4: 发送邮件');
+          console.log('[Pipeline] Step 5: 发送邮件');
           await sendDailyEmail();
           result.steps.push({ step: 'email', sent: true });
         }

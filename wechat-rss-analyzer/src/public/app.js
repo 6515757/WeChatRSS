@@ -80,19 +80,40 @@ function renderPipelineProgress(ps) {
 }
 
 function renderStepTimeline(completedSteps, isRunning) {
-  const doneNames = completedSteps.map(s => s.step);
+  const doneMap = {};
+  completedSteps.forEach(s => { doneMap[s.step] = s; });
   let currentStep = null;
-  if (isRunning) currentStep = STEP_ORDER.find(s => !doneNames.includes(s)) || null;
+  if (isRunning) currentStep = STEP_ORDER.find(s => !doneMap[s]) || null;
   const pillStyle = 'display:inline-flex;align-items:center;gap:4px;padding:2px 10px;font-family:Kalam,sans-serif;font-weight:700;border:2px solid currentColor;border-radius:14px 5px 16px 6px / 6px 14px 5px 16px;';
   const parts = STEP_ORDER.map(step => {
-    const done = doneNames.includes(step);
+    const done = !!doneMap[step];
     const active = step === currentStep;
     const label = STEP_LABELS[step] || step;
-    if (done) return '<span style="' + pillStyle + 'color:#d5f0c7;">✓ ' + label + '</span>';
+    const title = done ? stepDetail(step, doneMap[step]) : '';
+    const titleAttr = title ? ' title="' + escHtml(title) + '"' : '';
+    if (done) return '<span style="' + pillStyle + 'color:#d5f0c7;"' + titleAttr + '>✓ ' + label + '</span>';
     if (active) return '<span style="' + pillStyle + 'color:#fff9c4;"><span class="spinner">⟳</span> ' + label + '</span>';
     return '<span style="' + pillStyle + 'color:rgba(253,251,247,0.4);">' + label + '</span>';
   });
   return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;">' + parts.join('<span style="opacity:0.4;margin:0 6px;">~~</span>') + '</div>';
+}
+
+function stepDetail(step, s) {
+  if (!s) return '';
+  if (step === 'refresh') return (s.success || 0) + '/' + (s.total || 0) + ' 个公众号';
+  if (step === 'sync') return '新增 ' + (s.added || 0) + '，已有 ' + (s.existing || 0);
+  if (step === 'fetch') {
+    const reasonMap = { 'all-ready': '全部正文齐', 'no-progress': '无进展放弃', 'timeout': '超时' };
+    const reason = reasonMap[s.reason] || (s.reason || '');
+    const parts = ['新增 ' + (s.newArticles || 0) + ' 篇'];
+    if (s.rounds) parts.push(s.rounds + ' 轮抓取');
+    if (s.stillShort) parts.push('仍缺 ' + s.stillShort + ' 篇正文');
+    if (reason) parts.push(reason);
+    return parts.join(' · ');
+  }
+  if (step === 'analyze') return '成功 ' + (s.success || 0) + '，失败 ' + (s.failed || 0);
+  if (step === 'email') return s.sent ? '已发送' : '';
+  return '';
 }
 
 let feedsCache = null;
