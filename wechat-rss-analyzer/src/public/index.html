@@ -109,6 +109,25 @@
     .key-list { list-style: disc; padding-left: 1.2rem; margin: 4px 0 8px; }
     .key-list li { margin-bottom: 2px; }
 
+    /* feed 列表（文章页左栏） */
+    .feed-item {
+      display: flex; align-items: center; gap: 0.625rem;
+      padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+      font-size: 0.8125rem; color: #4b5563; cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .feed-item:hover { background: #eef2ff; color: #4338ca; }
+    .feed-item.active { background: #eef2ff; color: #4338ca; font-weight: 600; }
+    .feed-item .count { margin-left: auto; font-size: 11px; color: #9ca3af; font-weight: 400; }
+    .feed-item.active .count { color: #6366f1; }
+    .feed-item .avatar {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: linear-gradient(135deg, #c7d2fe, #818cf8);
+      color: #fff; font-size: 11px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #e0e7ff; border-radius: 3px; }
@@ -139,17 +158,13 @@
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         任务
       </div>
-      <div class="nav-item" onclick="showPage('reports')" id="nav-reports">
+      <div class="nav-item" onclick="showPage('digests')" id="nav-digests">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         报告
       </div>
       <div class="nav-item" onclick="showPage('articles')" id="nav-articles">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         文章
-      </div>
-      <div class="nav-item" onclick="showPage('digests')" id="nav-digests">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-        邮件
       </div>
       <div class="nav-item" onclick="showPage('feeds')" id="nav-feeds">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
@@ -212,46 +227,10 @@
       </section>
     </div>
 
-    <!-- Reports Page -->
-    <div id="page-reports" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
-      <header class="flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-gray-900">报告</h1>
-      </header>
-      <div id="reports-list" class="space-y-2">
-        <div class="text-gray-400 text-sm text-center py-16">加载中...</div>
-      </div>
-      <div id="report-modal" class="hidden fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-8">
-        <div class="bg-white rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl fade-in border border-gray-100">
-          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 id="report-modal-title" class="text-sm font-semibold text-gray-900"></h2>
-            <button onclick="closeReportModal()" class="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors text-sm">✕</button>
-          </div>
-          <div id="report-modal-content" class="prose-report overflow-y-auto px-6 py-5 flex-1 text-sm"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Articles Page -->
-    <div id="page-articles" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
-      <header class="flex items-center justify-between gap-3 flex-wrap">
-        <h1 class="text-lg font-semibold text-gray-900">文章</h1>
-        <div class="flex items-center gap-2">
-          <select id="article-feed-filter" class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" onchange="onArticleFeedChange()">
-            <option value="">全部公众号</option>
-          </select>
-          <input id="article-search" type="text" placeholder="搜索..." class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" oninput="searchArticles()" />
-        </div>
-      </header>
-      <div id="articles-list" class="space-y-1">
-        <div class="text-gray-400 text-sm text-center py-16">加载中...</div>
-      </div>
-      <div id="articles-pagination" class="flex justify-center gap-1.5 pt-4"></div>
-    </div>
-
-    <!-- Digests Page -->
+    <!-- Digests (now called 报告) Page -->
     <div id="page-digests" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
       <header class="flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-gray-900">邮件</h1>
+        <h1 class="text-lg font-semibold text-gray-900">报告</h1>
         <span class="text-xs text-gray-400" id="digests-count"></span>
       </header>
       <div id="digests-list" class="space-y-2">
@@ -270,6 +249,38 @@
             <button onclick="closeDigestModal()" class="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors text-sm ml-3 flex-shrink-0">✕</button>
           </div>
           <iframe id="digest-modal-iframe" class="flex-1 w-full rounded-b-xl" style="border:none;min-height:60vh;background:#f0f4f8;"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <!-- Articles Page -->
+    <div id="page-articles" class="hidden h-full">
+      <div class="flex h-full min-h-0">
+        <!-- Left: feed picker -->
+        <aside class="w-60 border-r border-gray-100 bg-gradient-to-b from-gray-50/50 to-white flex-shrink-0 flex flex-col overflow-hidden">
+          <div class="px-5 pt-6 pb-3">
+            <h1 class="text-lg font-semibold text-gray-900">文章</h1>
+          </div>
+          <div class="px-3 pb-4 flex-1 overflow-y-auto" id="article-feeds-panel">
+            <div class="text-gray-400 text-xs text-center py-8">加载中...</div>
+          </div>
+        </aside>
+
+        <!-- Right: articles list -->
+        <div class="flex-1 overflow-y-auto">
+          <div class="p-8 max-w-3xl mx-auto space-y-6">
+            <header class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <h2 id="articles-header-title" class="text-base font-semibold text-gray-900">全部公众号</h2>
+                <div id="articles-header-sub" class="text-xs text-gray-400 mt-0.5"></div>
+              </div>
+              <input id="article-search" type="text" placeholder="搜索标题..." class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs w-52 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" oninput="searchArticles()" />
+            </header>
+            <div id="articles-list" class="space-y-1">
+              <div class="text-gray-400 text-sm text-center py-16">加载中...</div>
+            </div>
+            <div id="articles-pagination" class="flex justify-center gap-1.5 pt-4"></div>
+          </div>
         </div>
       </div>
     </div>

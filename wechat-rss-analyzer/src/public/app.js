@@ -3,24 +3,37 @@ let currentPage = 'tasks';
 let articlePage = 1;
 let articleKeyword = '';
 let articleFeedId = '';
-let feedsLoadedForFilter = false;
 let statusPollTimer = null;
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 function showPage(page) {
-  ['tasks', 'reports', 'articles', 'digests', 'feeds'].forEach(p => {
-    document.getElementById(`page-${p}`).classList.add('hidden');
-    document.getElementById(`nav-${p}`).classList.remove('active');
+  // 页面遍历：原先的 reports 已并入 digests，无需保留
+  ['tasks', 'articles', 'digests', 'feeds'].forEach(p => {
+    const pageEl = document.getElementById(`page-${p}`);
+    if (pageEl) pageEl.classList.add('hidden');
+    const navEl = document.getElementById(`nav-${p}`);
+    if (navEl) navEl.classList.remove('active');
   });
   document.getElementById(`page-${page}`).classList.remove('hidden');
   document.getElementById(`nav-${page}`).classList.add('active');
   currentPage = page;
 
+  // articles 页采用左右分栏，自己管理滚动；其它页让外层 main 滚动
+  const mainEl = document.querySelector('main.main-content');
+  if (mainEl) {
+    if (page === 'articles') {
+      mainEl.classList.add('overflow-hidden');
+      mainEl.classList.remove('overflow-y-auto');
+    } else {
+      mainEl.classList.remove('overflow-hidden');
+      mainEl.classList.add('overflow-y-auto');
+    }
+  }
+
   if (page === 'tasks') { refreshStatus(); startStatusPoll(); }
   else { stopStatusPoll(); }
-  if (page === 'reports') loadReports();
-  if (page === 'articles') { ensureFeedFilterOptions(); loadArticles(); }
+  if (page === 'articles') { ensureFeedSidebar(); loadArticles(); }
   if (page === 'digests') loadDigests();
   if (page === 'feeds') loadFeeds();
 }
@@ -224,80 +237,57 @@ async function runEmail(type) {
   }
 }
 
-// ─── Reports ──────────────────────────────────────────────────────────────────
-
-async function loadReports() {
-  const el = document.getElementById('reports-list');
-  el.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">加载中...</div>';
-  try {
-    const data = await get('/reports');
-    const reports = data.reports || data.data || data || [];
-    if (reports.length === 0) {
-      el.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">暂无报告</div>';
-      return;
-    }
-    el.innerHTML = reports.map(r => `
-      <div class="card hover:border-gray-200 cursor-pointer transition-colors" onclick="openReport('${r.id}', '${escHtml(r.title)}')">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-sm font-medium text-gray-900">${escHtml(r.title)}</div>
-            <div class="text-xs text-gray-400 mt-1">${new Date(r.createdAt).toLocaleString('zh-CN')}</div>
-          </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </div>
-      </div>
-    `).join('');
-  } catch (e) {
-    el.innerHTML = `<div class="text-red-400 text-sm text-center py-8">加载失败: ${e.message}</div>`;
-  }
-}
-
-async function openReport(id, title) {
-  document.getElementById('report-modal-title').textContent = title;
-  document.getElementById('report-modal-content').innerHTML = '<div class="text-gray-400 text-center py-8">加载中...</div>';
-  document.getElementById('report-modal').classList.remove('hidden');
-  try {
-    const data = await get(`/reports/${id}`);
-    const content = data.report?.content || data.content || '';
-    document.getElementById('report-modal-content').innerHTML = marked.parse(content);
-  } catch (e) {
-    document.getElementById('report-modal-content').innerHTML = `<div class="text-red-400">加载失败: ${e.message}</div>`;
-  }
-}
-
-function closeReportModal() {
-  document.getElementById('report-modal').classList.add('hidden');
-}
-
-async function generateReport() {
-  try {
-    await post('/reports/generate', { type: 'daily' });
-    showToast('日报生成中...');
-    setTimeout(loadReports, 3000);
-  } catch (e) {
-    showToast('生成失败: ' + e.message, 'error');
-  }
-}
+// ─── Reports（老报告板块，已并入「报告」=digests 板块，保留占位避免旧代码 ReferenceError） ─
+// 老报告功能已废弃。这里保留一些没被调用到的空函数，防止 index.html 缓存还指向它们。
 
 // ─── Articles ─────────────────────────────────────────────────────────────────
 
-async function ensureFeedFilterOptions() {
-  if (feedsLoadedForFilter) return;
+let feedsCache = null;
+async function ensureFeedSidebar() {
+  const panel = document.getElementById('article-feeds-panel');
+  if (!panel) return;
+  if (feedsCache) {
+    renderFeedSidebar();
+    return;
+  }
   try {
     const data = await get('/feeds');
     const feeds = data.feeds || data.data || data || [];
-    const select = document.getElementById('article-feed-filter');
-    if (!select) return;
-    // 保留第一项「全部公众号」，追加其他
-    select.innerHTML = '<option value="">全部公众号</option>' +
-      feeds.map(f => `<option value="${escHtml(f.id)}">${escHtml(f.name)}</option>`).join('');
-    feedsLoadedForFilter = true;
-  } catch (e) { /* ignore */ }
+    feedsCache = feeds;
+    renderFeedSidebar();
+  } catch (e) {
+    panel.innerHTML = `<div class="text-red-400 text-xs px-3 py-4">加载失败: ${escHtml(e.message)}</div>`;
+  }
 }
 
-function onArticleFeedChange() {
-  articleFeedId = document.getElementById('article-feed-filter').value || '';
+function renderFeedSidebar() {
+  const panel = document.getElementById('article-feeds-panel');
+  if (!panel || !feedsCache) return;
+  const active = articleFeedId || '';
+  const totalCount = feedsCache.reduce((s, f) => s + (f.articleCount || 0), 0) || '';
+  const allItem = `
+    <div class="feed-item ${active === '' ? 'active' : ''}" onclick="selectFeed('')">
+      <div class="avatar" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);">全</div>
+      <span>全部</span>
+    </div>
+  `;
+  const items = feedsCache.map((f) => {
+    const cls = active === f.id ? 'active' : '';
+    const initial = (f.name || '·').slice(0, 1);
+    return `
+      <div class="feed-item ${cls}" onclick="selectFeed('${escHtml(f.id)}')" title="${escHtml(f.name)}">
+        <div class="avatar">${escHtml(initial)}</div>
+        <span class="truncate" style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${escHtml(f.name)}</span>
+      </div>
+    `;
+  }).join('');
+  panel.innerHTML = `<div class="space-y-0.5">${allItem}${items}</div>`;
+}
+
+function selectFeed(feedId) {
+  articleFeedId = feedId || '';
   articlePage = 1;
+  renderFeedSidebar();
   loadArticles();
 }
 
@@ -323,8 +313,21 @@ async function loadArticles(page = articlePage) {
     const articles = data.articles || data.data || data || [];
     const total = data.total || articles.length;
 
+    // header
+    const titleEl = document.getElementById('articles-header-title');
+    const subEl = document.getElementById('articles-header-sub');
+    if (titleEl) {
+      if (articleFeedId && feedsCache) {
+        const f = feedsCache.find(x => x.id === articleFeedId);
+        titleEl.textContent = f ? f.name : '未知公众号';
+      } else {
+        titleEl.textContent = '全部公众号';
+      }
+    }
+    if (subEl) subEl.textContent = `共 ${total} 篇`;
+
     if (articles.length === 0) {
-      el.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">暂无文章</div>';
+      el.innerHTML = '<div class="text-gray-400 text-sm text-center py-16">暂无文章</div>';
       document.getElementById('articles-pagination').innerHTML = '';
       return;
     }
@@ -609,6 +612,7 @@ async function addFeed() {
     await post('/feeds', { name, url, sourceType: 'we-mp-rss', titleFilter: titleFilter || null });
     showToast('订阅源添加成功');
     closeFeedModal();
+    feedsCache = null;
     loadFeeds();
   } catch (e) {
     showToast('添加失败: ' + e.message, 'error');
@@ -618,6 +622,7 @@ async function addFeed() {
 async function toggleFeed(id, enabled) {
   try {
     await put(`/feeds/${id}`, { enabled });
+    feedsCache = null;
     loadFeeds();
   } catch (e) {
     showToast('操作失败: ' + e.message, 'error');
@@ -629,6 +634,7 @@ async function deleteFeed(id, name) {
   try {
     await del(`/feeds/${id}`);
     showToast('已删除');
+    feedsCache = null;
     loadFeeds();
   } catch (e) {
     showToast('删除失败: ' + e.message, 'error');
