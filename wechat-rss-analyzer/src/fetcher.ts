@@ -56,12 +56,26 @@ export async function fetchFeed(feedId: string): Promise<{
 
     // Dedup by URL
     const existingRows = await db
-      .select({ id: articles.id })
+      .select({ id: articles.id, content: articles.content })
       .from(articles)
       .where(eq(articles.url, raw.url))
       .limit(1);
 
-    if (existingRows.length > 0) continue;
+    if (existingRows.length > 0) {
+      // 文章已存在：如果之前存的 content 太短（大概率是微信首发时 we-mp-rss 还没拿到全文），
+      // 这次源头已经给出更完整的正文，就补齐一下。
+      const existing = existingRows[0];
+      const newLen = raw.content ? raw.content.length : 0;
+      const oldLen = existing.content ? existing.content.length : 0;
+      if (newLen > 200 && newLen > oldLen * 3) {
+        await db
+          .update(articles)
+          .set({ content: raw.content })
+          .where(eq(articles.id, existing.id));
+        console.log('[Fetcher] content 回填: ' + raw.title + ' (' + oldLen + ' -> ' + newLen + ')');
+      }
+      continue;
+    }
 
     const newArticle: NewArticle = {
       id: uuidv4(),
