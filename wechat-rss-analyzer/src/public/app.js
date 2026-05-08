@@ -2,6 +2,8 @@ const API = '/api';
 let currentPage = 'tasks';
 let articlePage = 1;
 let articleKeyword = '';
+let articleFeedId = '';
+let feedsLoadedForFilter = false;
 let statusPollTimer = null;
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
@@ -18,7 +20,7 @@ function showPage(page) {
   if (page === 'tasks') { refreshStatus(); startStatusPoll(); }
   else { stopStatusPoll(); }
   if (page === 'reports') loadReports();
-  if (page === 'articles') loadArticles();
+  if (page === 'articles') { ensureFeedFilterOptions(); loadArticles(); }
   if (page === 'feeds') loadFeeds();
 }
 
@@ -278,6 +280,26 @@ async function generateReport() {
 
 // ─── Articles ─────────────────────────────────────────────────────────────────
 
+async function ensureFeedFilterOptions() {
+  if (feedsLoadedForFilter) return;
+  try {
+    const data = await get('/feeds');
+    const feeds = data.feeds || data.data || data || [];
+    const select = document.getElementById('article-feed-filter');
+    if (!select) return;
+    // 保留第一项「全部公众号」，追加其他
+    select.innerHTML = '<option value="">全部公众号</option>' +
+      feeds.map(f => `<option value="${escHtml(f.id)}">${escHtml(f.name)}</option>`).join('');
+    feedsLoadedForFilter = true;
+  } catch (e) { /* ignore */ }
+}
+
+function onArticleFeedChange() {
+  articleFeedId = document.getElementById('article-feed-filter').value || '';
+  articlePage = 1;
+  loadArticles();
+}
+
 let searchTimer = null;
 function searchArticles() {
   clearTimeout(searchTimer);
@@ -295,6 +317,7 @@ async function loadArticles(page = articlePage) {
   try {
     const params = new URLSearchParams({ page, pageSize: 20 });
     if (articleKeyword) params.set('keyword', articleKeyword);
+    if (articleFeedId) params.set('feedId', articleFeedId);
     const data = await get(`/articles?${params}`);
     const articles = data.articles || data.data || data || [];
     const total = data.total || articles.length;
@@ -306,9 +329,20 @@ async function loadArticles(page = articlePage) {
     }
 
     el.innerHTML = articles.map(a => {
-      const hasAnalysis = a.analysis || a.analysisId;
+      const hasAnalysis = a.analysis || a.analysisId || a.hasAnalysis;
       const score = a.analysis?.importanceScore ?? a.importanceScore;
       const scoreColor = score >= 7 ? 'text-red-500' : score >= 5 ? 'text-yellow-500' : 'text-gray-400';
+      const summary = a.summary || a.analysis?.summary || '';
+      let statusBadge;
+      if (summary === 'Content unavailable') {
+        statusBadge = '<span class="badge bg-gray-100 text-gray-500">无正文</span>';
+      } else if (summary === 'Analysis failed') {
+        statusBadge = '<span class="badge bg-red-100 text-red-600">分析失败</span>';
+      } else if (hasAnalysis) {
+        statusBadge = '<span class="badge bg-green-100 text-green-700">已分析</span>';
+      } else {
+        statusBadge = '<span class="badge bg-gray-100 text-gray-500">未分析</span>';
+      }
       return `
         <div class="card py-3 px-4">
           <div class="flex items-start justify-between gap-3">
@@ -317,10 +351,10 @@ async function loadArticles(page = articlePage) {
               <div class="flex items-center gap-3 mt-1">
                 <span class="text-xs text-gray-400">${escHtml(a.feedName || a.feed?.name || '')}</span>
                 <span class="text-xs text-gray-400">${a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('zh-CN') : ''}</span>
-                ${hasAnalysis ? '<span class="badge bg-green-100 text-green-700">已分析</span>' : '<span class="badge bg-gray-100 text-gray-500">未分析</span>'}
+                ${statusBadge}
               </div>
             </div>
-            ${score != null ? `<span class="text-sm font-bold ${scoreColor} flex-shrink-0">${score.toFixed(1)}</span>` : ''}
+            ${score != null ? `<span class="text-sm font-bold ${scoreColor} flex-shrink-0">${Number(score).toFixed(1)}</span>` : ''}
           </div>
         </div>
       `;

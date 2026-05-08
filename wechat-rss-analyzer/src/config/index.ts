@@ -18,8 +18,9 @@ export const config = {
   },
   cron: {
     refreshRss: process.env.REFRESH_RSS_CRON || '30 8 * * *',
-    fetch: process.env.FETCH_CRON || '35 8 * * *',
-    analyze: process.env.ANALYZE_CRON || '40 8 * * *',
+    fetch: process.env.FETCH_CRON || '55 8 * * *',
+    fetchBackfill: process.env.FETCH_BACKFILL_CRON || '0 10 * * *',
+    analyze: process.env.ANALYZE_CRON || '0 9 * * *',
     dailyReport: process.env.DAILY_REPORT_CRON || '0 20 * * *',
   },
   weMpRss: {

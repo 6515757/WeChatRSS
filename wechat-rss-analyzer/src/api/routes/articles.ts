@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { eq, desc, like, and } from 'drizzle-orm';
+import { eq, desc, like, and, sql } from 'drizzle-orm';
 import { getDb } from '../../db';
 import { articles, analyses, feeds } from '../../db/schema';
 
@@ -25,6 +25,7 @@ export async function articleRoutes(app: FastifyInstance): Promise<void> {
     if (req.query.keyword) {
       conditions.push(like(articles.title, `%${req.query.keyword}%`));
     }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const rows = await db
       .select({
@@ -43,14 +44,22 @@ export async function articleRoutes(app: FastifyInstance): Promise<void> {
       .from(articles)
       .leftJoin(analyses, eq(articles.id, analyses.articleId))
       .innerJoin(feeds, eq(articles.feedId, feeds.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(whereClause)
       .orderBy(desc(articles.fetchedAt))
       .limit(pageSize)
       .offset(offset);
 
+    const totalRows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(articles)
+      .innerJoin(feeds, eq(articles.feedId, feeds.id))
+      .where(whereClause);
+    const total = Number(totalRows[0]?.count ?? 0);
+
     return {
       page,
       pageSize,
+      total,
       data: rows.map((r) => ({
         ...r,
         hasAnalysis: !!r.hasAnalysis,

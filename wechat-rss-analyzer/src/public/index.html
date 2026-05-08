@@ -178,15 +178,20 @@
             <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">08:30</span>
             <span class="text-xs text-gray-500">刷新</span>
           </div>
-          <div class="w-8 border-t border-dashed border-gray-200"></div>
+          <div class="w-6 border-t border-dashed border-gray-200"></div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">08:35</span>
+            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">08:55</span>
             <span class="text-xs text-gray-500">抓取</span>
           </div>
-          <div class="w-8 border-t border-dashed border-gray-200"></div>
+          <div class="w-6 border-t border-dashed border-gray-200"></div>
           <div class="flex items-center gap-2">
-            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">08:40</span>
+            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">09:00</span>
             <span class="text-xs text-gray-500">分析 + 邮件</span>
+          </div>
+          <div class="w-6 border-t border-dashed border-gray-200"></div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">10:00</span>
+            <span class="text-xs text-gray-500">补漏</span>
           </div>
         </div>
       </section>
@@ -213,9 +218,14 @@
 
     <!-- Articles Page -->
     <div id="page-articles" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
-      <header class="flex items-center justify-between">
+      <header class="flex items-center justify-between gap-3 flex-wrap">
         <h1 class="text-lg font-semibold text-gray-900">文章</h1>
-        <input id="article-search" type="text" placeholder="搜索..." class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" oninput="searchArticles()" />
+        <div class="flex items-center gap-2">
+          <select id="article-feed-filter" class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" onchange="onArticleFeedChange()">
+            <option value="">全部公众号</option>
+          </select>
+          <input id="article-search" type="text" placeholder="搜索..." class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs w-44 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" oninput="searchArticles()" />
+        </div>
       </header>
       <div id="articles-list" class="space-y-1">
         <div class="text-gray-400 text-sm text-center py-16">加载中...</div>

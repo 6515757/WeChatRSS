@@ -46,12 +46,43 @@ export async function analyzeArticle(articleId: string): Promise<void> {
     throw new Error('Article not found: ' + articleId);
   }
 
-  if (!article.content) {
-    console.warn('Article content empty, skip: ' + article.title);
+  const MIN_CONTENT_LEN = 500;
+  const UNAVAILABLE_AFTER_HOURS = 48;
+
+  const contentLen = article.content ? article.content.length : 0;
+  if (contentLen < MIN_CONTENT_LEN) {
+    // 新文章：正文可能还没被 we-mp-rss 抓全，留给下一次 fetch/analyze 自动补齐
+    const fetchedAt = article.fetchedAt ? new Date(article.fetchedAt).getTime() : 0;
+    const ageHours = (Date.now() - fetchedAt) / 3600000;
+    if (ageHours < UNAVAILABLE_AFTER_HOURS) {
+      console.warn(
+        '[Analyzer] content 过短，稍后重试: ' + article.title + ' (len=' + contentLen + ', age=' + ageHours.toFixed(1) + 'h)'
+      );
+      return;
+    }
+    // 超过 48h 仍然短：源头基本没有正文，记录为 Content unavailable，
+    // 这样 analyzeUnprocessedArticles 下次就不会再扫到它
+    console.warn('[Analyzer] content 不可用，跳过并登记: ' + article.title + ' (len=' + contentLen + ')');
+    try {
+      await db.insert(analyses).values({
+        id: uuidv4(),
+        articleId: article.id,
+        summary: 'Content unavailable',
+        topics: '[]',
+        keyPoints: '[]',
+        keyData: '[]',
+        importanceScore: 0,
+        rawResponse: '[SKIPPED] content too short (' + contentLen + ' chars), source likely has no full text',
+        analyzedAt: new Date().toISOString(),
+      });
+      saveDatabaseSync();
+    } catch {
+      // ignore conflict
+    }
     return;
   }
 
-  const prompt = buildArticleAnalysisPrompt(article.title, article.content);
+  const prompt = buildArticleAnalysisPrompt(article.title, article.content!);
 
   let rawResponse = '';
   try {
