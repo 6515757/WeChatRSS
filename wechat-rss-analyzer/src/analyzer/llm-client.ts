@@ -89,17 +89,29 @@ class LLMClient {
   }
 }
 
-// 简单的 JSON 修复：处理中文/花引号，以及字符串内部的裸换行。
+// 简单的 JSON 修复：处理中文/花引号、字符串内部裸双引号、以及字符串内部的裸换行。
 // 仅在原始 JSON.parse 失败后作为兜底使用。
 function repairJson(input: string): string {
   let s = input;
-  // 中文/花括号引号 → 普通双引号
+  // 中文/花括号引号 → 普通双引号（出现在值内部时统一处理，会在下面的扫描中被转义）
   s = s.replace(/[\u201c\u201d\u2033]/g, '"').replace(/[\u2018\u2019\u2032]/g, "'");
-  // 字符串内的裸换行转义成 \n
+
+  // 扫描：逐字符判断当前是否在字符串里。遇到字符串内部的非转义 `"` 需要判断它是真正的字符串结束，
+  // 还是作者写在正文里的引号——启发式：看紧随其后的下一个非空白字符是不是 JSON 结构字符
+  // (`,` `}` `]` `:`)，若不是则视为字符串内容中的引号并转义它。
   let out = '';
   let inStr = false;
   let escape = false;
-  for (const ch of s) {
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (!inStr) {
+      if (ch === '"') {
+        inStr = true;
+      }
+      out += ch;
+      continue;
+    }
+    // in string
     if (escape) {
       out += ch;
       escape = false;
@@ -111,12 +123,26 @@ function repairJson(input: string): string {
       continue;
     }
     if (ch === '"') {
-      inStr = !inStr;
-      out += ch;
+      // peek 后面的第一个非空白字符
+      let j = i + 1;
+      while (j < s.length && (s[j] === ' ' || s[j] === '\t' || s[j] === '\r' || s[j] === '\n')) j++;
+      const next = s[j];
+      if (next === ',' || next === '}' || next === ']' || next === ':' || next === undefined) {
+        // 视为字符串结束
+        inStr = false;
+        out += ch;
+      } else {
+        // 视为字符串中未转义的引号，补转义
+        out += '\\"';
+      }
       continue;
     }
-    if (inStr && (ch === '\n' || ch === '\r')) {
-      out += ch === '\n' ? '\\n' : '\\r';
+    if (ch === '\n') {
+      out += '\\n';
+      continue;
+    }
+    if (ch === '\r') {
+      out += '\\r';
       continue;
     }
     out += ch;
