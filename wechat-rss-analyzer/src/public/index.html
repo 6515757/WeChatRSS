@@ -3,252 +3,463 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WeChatRSS</title>
+  <title>WeChatRSS · 公众号手札</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide-static@0.263.1/font/lucide.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet" />
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            neutral: {
-              925: '#0f0f10',
-              850: '#1a1a1d',
-            }
+            paper:   '#fdfbf7',
+            ink:     '#2d2d2d',
+            aged:    '#e5e0d8',
+            marker:  '#ff4d4d',
+            pen:     '#2d5da1',
+            postit:  '#fff9c4',
           },
           fontFamily: {
-            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'SF Pro Display', 'PingFang SC', 'sans-serif'],
+            hand: ['"Patrick Hand"', 'Kalam', 'system-ui', 'sans-serif'],
+            marker: ['Kalam', '"Patrick Hand"', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            'hd':    '4px 4px 0px 0px #2d2d2d',
+            'hd-sm': '2px 2px 0px 0px #2d2d2d',
+            'hd-lg': '8px 8px 0px 0px #2d2d2d',
+            'hd-soft': '3px 3px 0px 0px rgba(45,45,45,0.18)',
           },
         }
       }
     }
   </script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', sans-serif; -webkit-font-smoothing: antialiased; background: #f5f6fa; }
+    /* ---------- Base ---------- */
+    html, body { background: #fdfbf7; color: #2d2d2d; }
+    body {
+      font-family: 'Patrick Hand', 'Kalam', system-ui, sans-serif;
+      font-size: 17px;
+      -webkit-font-smoothing: antialiased;
+      background-image: radial-gradient(#e5e0d8 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    h1, h2, h3, h4, .font-marker { font-family: 'Kalam', 'Patrick Hand', system-ui, sans-serif; font-weight: 700; }
 
+    /* ---------- Wobbly utility classes ---------- */
+    .wobbly   { border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+    .wobbly-md{ border-radius: 30px 12px 28px 14px / 14px 30px 12px 28px; }
+    .wobbly-sm{ border-radius: 18px 8px 16px 10px / 10px 18px 8px 16px; }
+    .wobbly-chip{ border-radius: 12px 6px 14px 8px / 8px 12px 6px 14px; }
+
+    /* ---------- Sidebar nav items ---------- */
     .nav-item {
       display: flex; align-items: center; gap: 0.75rem;
-      padding: 0.625rem 0.875rem; border-radius: 0.5rem;
-      font-size: 0.8125rem; font-weight: 500; color: #6b7280;
-      cursor: pointer; transition: all 0.15s ease;
+      padding: 0.55rem 0.85rem;
+      font-size: 1.05rem;
+      color: #2d2d2d;
+      cursor: pointer;
+      border: 2px solid transparent;
+      background: transparent;
+      transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
     }
-    .nav-item:hover { color: #4f46e5; background: #eef2ff; }
-    .nav-item.active { color: #4f46e5; background: #eef2ff; font-weight: 600; }
-    .nav-item .icon { width: 16px; height: 16px; stroke-width: 1.75; }
+    .nav-item:hover { transform: rotate(-1deg); }
+    .nav-item.active {
+      background: #fff9c4;
+      border: 2px solid #2d2d2d;
+      border-radius: 20px 8px 22px 10px / 10px 20px 8px 22px;
+      box-shadow: 3px 3px 0px 0px #2d2d2d;
+      transform: rotate(-1deg);
+    }
+    .nav-item .icon { width: 18px; height: 18px; stroke-width: 2.5; }
 
+    /* ---------- Buttons ---------- */
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-      padding: 0.5rem 1.125rem; border-radius: 0.5rem;
-      font-size: 0.8125rem; font-weight: 500; line-height: 1.25rem;
-      transition: all 0.15s ease; cursor: pointer; border: none;
+      padding: 0.5rem 1.15rem;
+      font-family: 'Patrick Hand', 'Kalam', sans-serif;
+      font-size: 1rem;
+      line-height: 1.2;
+      border: 3px solid #2d2d2d;
+      background: #ffffff;
+      color: #2d2d2d;
+      cursor: pointer;
+      transition: transform 0.1s ease, background 0.1s ease, color 0.1s ease, box-shadow 0.1s ease;
+      box-shadow: 4px 4px 0px 0px #2d2d2d;
+      border-radius: 20px 6px 22px 8px / 8px 20px 6px 22px;
     }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-primary { background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,0.3); }
-    .btn-primary:hover:not(:disabled) { background: #4338ca; box-shadow: 0 4px 12px rgba(79,70,229,0.35); transform: translateY(-1px); }
-    .btn-secondary { background: #fff; color: #374151; border: 1px solid #e5e7eb; }
-    .btn-secondary:hover:not(:disabled) { background: #f9fafb; border-color: #c7d2fe; color: #4f46e5; }
-    .btn-danger { background: #fff; color: #dc2626; border: 1px solid #fecaca; }
-    .btn-danger:hover:not(:disabled) { background: #fef2f2; }
-
-    .card {
-      background: #fff; border-radius: 0.875rem;
-      border: 1px solid #e8eaf0; padding: 1.5rem;
-      transition: all 0.2s ease;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    .btn:hover:not(:disabled) {
+      background: #ff4d4d; color: #fff;
+      box-shadow: 2px 2px 0px 0px #2d2d2d;
+      transform: translate(2px, 2px);
     }
-    .card:hover { border-color: #c7d2fe; box-shadow: 0 4px 16px rgba(79,70,229,0.08); }
+    .btn:active:not(:disabled) {
+      box-shadow: 0 0 0 0 #2d2d2d;
+      transform: translate(4px, 4px);
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #ff4d4d; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #2d2d2d; color: #fff; }
+    .btn-secondary { background: #e5e0d8; }
+    .btn-secondary:hover:not(:disabled) { background: #2d5da1; color: #fff; }
+    .btn-danger { background: #ffffff; color: #ff4d4d; border-color: #ff4d4d; }
+    .btn-danger:hover:not(:disabled) { background: #ff4d4d; color: #fff; border-color: #2d2d2d; }
+    .btn-xs { padding: 0.25rem 0.75rem; font-size: 0.875rem; border-width: 2px; box-shadow: 3px 3px 0 0 #2d2d2d; border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px; }
+    .btn-xs:hover:not(:disabled) { box-shadow: 1px 1px 0 0 #2d2d2d; transform: translate(2px,2px); }
 
+    /* ---------- Card / Paper ---------- */
+    .paper {
+      position: relative;
+      background: #ffffff;
+      border: 2px solid #2d2d2d;
+      box-shadow: 4px 4px 0px 0px #2d2d2d;
+      border-radius: 24px 10px 26px 12px / 12px 24px 10px 26px;
+    }
+    .paper-soft {
+      background: #ffffff;
+      border: 2px solid #2d2d2d;
+      box-shadow: 3px 3px 0px 0px rgba(45,45,45,0.18);
+      border-radius: 20px 8px 22px 10px / 10px 20px 8px 22px;
+    }
+    .paper-dashed {
+      background: #ffffff;
+      border: 2px dashed #2d2d2d;
+      border-radius: 20px 8px 22px 10px / 10px 20px 8px 22px;
+    }
+
+    /* Tape strip decoration */
+    .tape::before {
+      content: "";
+      position: absolute;
+      top: -14px; left: 50%;
+      width: 96px; height: 22px;
+      background: rgba(45,93,161,0.25);
+      border: 1px solid rgba(45,45,45,0.3);
+      transform: translateX(-50%) rotate(-3deg);
+    }
+    /* Thumbtack */
+    .tack::before {
+      content: "";
+      position: absolute;
+      top: -10px; left: 50%;
+      width: 14px; height: 14px;
+      background: #ff4d4d;
+      border: 2px solid #2d2d2d;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      box-shadow: 1px 1px 0 0 #2d2d2d;
+    }
+
+    /* Sticky note (post-it) */
+    .postit {
+      background: #fff9c4;
+      border: 2px solid #2d2d2d;
+      box-shadow: 4px 4px 0 0 #2d2d2d;
+      border-radius: 6px 22px 8px 20px / 20px 6px 22px 8px;
+    }
+
+    /* ---------- Inputs ---------- */
+    .input-hand {
+      font-family: 'Patrick Hand', 'Kalam', sans-serif;
+      background: #fff;
+      border: 2px solid #2d2d2d;
+      padding: 0.5rem 0.85rem;
+      font-size: 0.95rem;
+      color: #2d2d2d;
+      border-radius: 16px 6px 18px 8px / 8px 16px 6px 18px;
+      transition: border-color 0.1s ease, box-shadow 0.1s ease;
+    }
+    .input-hand::placeholder { color: rgba(45,45,45,0.45); }
+    .input-hand:focus {
+      outline: none;
+      border-color: #2d5da1;
+      box-shadow: 0 0 0 4px rgba(45,93,161,0.2);
+    }
+
+    /* ---------- Badges / chips ---------- */
     .badge {
       display: inline-flex; align-items: center;
-      padding: 0.125rem 0.5rem; border-radius: 0.375rem;
-      font-size: 0.6875rem; font-weight: 500;
+      padding: 1px 10px;
+      font-size: 0.78rem;
+      font-family: 'Patrick Hand', sans-serif;
+      border: 2px solid #2d2d2d;
+      background: #ffffff;
+      border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px;
+      box-shadow: 2px 2px 0 0 #2d2d2d;
     }
+    .badge-ok { background: #d5f0c7; }
+    .badge-none { background: #e5e0d8; }
+    .badge-fail { background: #ff4d4d; color: #fff; }
+    .badge-postit { background: #fff9c4; }
 
+    .topic-chip {
+      display: inline-block;
+      background: #fff9c4;
+      color: #2d2d2d;
+      border: 2px solid #2d2d2d;
+      font-size: 0.8rem;
+      padding: 1px 10px;
+      margin: 2px 4px 2px 0;
+      border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px;
+      box-shadow: 2px 2px 0 0 #2d2d2d;
+      transform: rotate(-1deg);
+    }
+    .topic-chip:nth-child(even) { transform: rotate(1deg); background:#d6e4f7; }
+
+    /* ---------- Pipeline "hero" card ---------- */
     .pipeline-card {
-      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #6366f1 100%);
-      border-radius: 0.875rem; padding: 1.75rem;
-      box-shadow: 0 8px 32px rgba(79,70,229,0.25);
-      position: relative; overflow: hidden;
+      position: relative;
+      background: #2d2d2d;
+      color: #fdfbf7;
+      border: 3px solid #2d2d2d;
+      box-shadow: 8px 8px 0 0 #2d2d2d;
+      border-radius: 36px 12px 32px 14px / 14px 36px 12px 32px;
+      padding: 1.6rem 1.75rem;
+      overflow: hidden;
     }
     .pipeline-card::before {
-      content: ''; position: absolute; top: -40px; right: -40px;
-      width: 180px; height: 180px; border-radius: 50%;
-      background: rgba(255,255,255,0.07);
-    }
-    .pipeline-card::after {
-      content: ''; position: absolute; bottom: -60px; left: 30%;
-      width: 220px; height: 220px; border-radius: 50%;
-      background: rgba(255,255,255,0.05);
+      content: "";
+      position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+      background-size: 20px 20px;
+      pointer-events: none;
     }
 
-    .task-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    /* ---------- Article cards ---------- */
+    .article-card {
+      position: relative;
+      background: #ffffff;
+      border: 2px solid #2d2d2d;
+      padding: 0.8rem 1rem;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 0 #2d2d2d;
+      border-radius: 18px 6px 22px 8px / 8px 18px 6px 22px;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .article-card:hover { transform: rotate(-0.5deg) translate(1px, 1px); box-shadow: 5px 5px 0 0 #2d2d2d; }
+    .article-card.open { background: #fffef3; box-shadow: 5px 5px 0 0 #2d2d2d; }
+    .article-card .chevron { transition: transform 0.2s ease; color: #2d2d2d; }
+    .article-card.open .chevron { transform: rotate(90deg); }
+    .article-detail { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
+    .article-card.open .article-detail { max-height: 3000px; }
+    .analysis-section { font-family: 'Patrick Hand', sans-serif; font-size: 1rem; color: #2d2d2d; line-height: 1.75; }
+    .analysis-section .label {
+      display: inline-block; font-family: 'Kalam', sans-serif; font-weight: 700;
+      color: #ff4d4d; margin-right: 6px;
+      border-bottom: 2px dashed #ff4d4d;
+    }
+    .key-list { list-style: none; padding-left: 0; margin: 4px 0 10px; }
+    .key-list li {
+      position: relative;
+      padding-left: 20px;
+      margin-bottom: 4px;
+    }
+    .key-list li::before {
+      content: "✶";
+      position: absolute; left: 0; top: 0;
+      color: #ff4d4d;
+      font-weight: 700;
+    }
 
-    .prose-report h1 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 1rem; color: #111827; }
-    .prose-report h2 { font-size: 1.25rem; font-weight: 600; margin: 1.25rem 0 0.75rem; color: #1f2937; }
-    .prose-report h3 { font-size: 1.0625rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #374151; }
-    .prose-report p { margin-bottom: 0.75rem; color: #4b5563; line-height: 1.7; }
-    .prose-report ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
-    .prose-report li { color: #4b5563; margin-bottom: 0.25rem; line-height: 1.6; }
-    .prose-report blockquote { border-left: 3px solid #c7d2fe; padding-left: 1rem; color: #6b7280; margin: 1rem 0; font-style: italic; background: #f5f3ff; padding: 0.75rem 1rem; border-radius: 0 0.5rem 0.5rem 0; }
+    /* ---------- Feed sidebar items (articles page) ---------- */
+    .feed-item {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.5rem 0.7rem;
+      font-size: 0.95rem; color: #2d2d2d;
+      cursor: pointer;
+      border: 2px solid transparent;
+      background: transparent;
+      transition: transform 0.1s ease, background 0.1s ease, box-shadow 0.1s ease;
+    }
+    .feed-item:hover { background: #fff9c4; transform: rotate(-0.5deg); }
+    .feed-item.active {
+      background: #fff9c4;
+      border: 2px solid #2d2d2d;
+      border-radius: 16px 6px 18px 8px / 8px 16px 6px 18px;
+      box-shadow: 3px 3px 0 0 #2d2d2d;
+    }
+    .feed-item .avatar {
+      width: 30px; height: 30px;
+      background: #ff4d4d; color: #fff;
+      font-family: 'Kalam', sans-serif; font-weight: 700; font-size: 0.9rem;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #2d2d2d;
+      border-radius: 10px 4px 12px 6px / 6px 10px 4px 12px;
+      flex-shrink: 0;
+      box-shadow: 2px 2px 0 0 #2d2d2d;
+    }
+    .feed-item:nth-child(3n) .avatar { background: #2d5da1; }
+    .feed-item:nth-child(3n+1) .avatar { background: #ff4d4d; }
+    .feed-item:nth-child(3n+2) .avatar { background: #2d2d2d; }
 
+    /* ---------- Score stamp ---------- */
+    .score-stamp {
+      font-family: 'Kalam', sans-serif; font-weight: 700;
+      color: #ff4d4d;
+      border: 2px solid #ff4d4d;
+      padding: 0 8px;
+      transform: rotate(-6deg);
+      border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px;
+      background: #fff;
+    }
+    .score-low { color: #2d2d2d; border-color: #2d2d2d; }
+    .score-mid { color: #c37400; border-color: #c37400; }
+
+    /* ---------- Schedule stamps ---------- */
+    .schedule-row { gap: 1rem; }
+    .schedule-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .schedule-pill .time {
+      font-family: 'Kalam', sans-serif; font-weight: 700;
+      background: #fff;
+      border: 2px solid #2d2d2d;
+      padding: 2px 10px;
+      box-shadow: 2px 2px 0 0 #2d2d2d;
+      border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px;
+    }
+    .schedule-pill .label { font-family: 'Patrick Hand', sans-serif; }
+
+    /* ---------- Misc ---------- */
     .spinner { animation: spin 0.8s linear infinite; display: inline-block; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn 0.2s ease-out; }
+    @keyframes bobble { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-4px) rotate(2deg); } }
+    .bobble { animation: bobble 3s ease-in-out infinite; }
 
-    .article-card { cursor: pointer; }
-    .article-card .chevron { transition: transform 0.2s ease; color: #9ca3af; }
-    .article-card.open .chevron { transform: rotate(90deg); }
-    .article-detail { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
-    .article-card.open .article-detail { max-height: 2400px; }
-    .analysis-section { font-size: 13px; color: #4b5563; line-height: 1.7; }
-    .analysis-section .label { display: inline-block; font-weight: 600; color: #4f46e5; margin-right: 6px; }
-    .topic-chip { display: inline-block; background: #eef2ff; color: #4338ca; font-size: 11px; padding: 2px 8px; border-radius: 999px; margin: 2px 4px 2px 0; }
-    .key-list { list-style: disc; padding-left: 1.2rem; margin: 4px 0 8px; }
-    .key-list li { margin-bottom: 2px; }
-
-    /* feed 列表（文章页左栏） */
-    .feed-item {
-      display: flex; align-items: center; gap: 0.625rem;
-      padding: 0.5rem 0.75rem; border-radius: 0.5rem;
-      font-size: 0.8125rem; color: #4b5563; cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .feed-item:hover { background: #eef2ff; color: #4338ca; }
-    .feed-item.active { background: #eef2ff; color: #4338ca; font-weight: 600; }
-    .feed-item .count { margin-left: auto; font-size: 11px; color: #9ca3af; font-weight: 400; }
-    .feed-item.active .count { color: #6366f1; }
-    .feed-item .avatar {
-      width: 24px; height: 24px; border-radius: 6px;
-      background: linear-gradient(135deg, #c7d2fe, #818cf8);
-      color: #fff; font-size: 11px; font-weight: 600;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-
-    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #e0e7ff; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #2d2d2d; border-radius: 6px; }
+
+    .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* Toast */
+    .toast {
+      font-family: 'Patrick Hand', sans-serif;
+      padding: 10px 18px;
+      border: 2px solid #2d2d2d;
+      background: #fff9c4;
+      box-shadow: 4px 4px 0 0 #2d2d2d;
+      border-radius: 20px 6px 22px 8px / 8px 20px 6px 22px;
+      transform: rotate(-1deg);
+    }
+    .toast-error { background: #ff4d4d; color: #fff; }
 
     @media (max-width: 768px) {
+      body { background-image: none; }
       .sidebar { display: none; }
-      .main-content { padding: 1.25rem !important; }
-      .grid-tasks { grid-template-columns: 1fr !important; }
-      .schedule-row { flex-direction: column; gap: 0.75rem !important; }
+      .schedule-row { flex-direction: column; align-items: flex-start; gap: 0.5rem !important; }
     }
   </style>
 </head>
-<body class="bg-white min-h-screen text-gray-900">
+<body class="min-h-screen">
 
 <div class="flex h-screen overflow-hidden">
   <!-- Sidebar -->
-  <aside class="sidebar w-56 flex flex-col flex-shrink-0 border-r border-indigo-100/60 bg-gradient-to-b from-indigo-50/80 to-white">
-    <div class="px-5 pt-6 pb-5">
-      <div class="flex items-center gap-2.5">
-        <div class="w-7 h-7 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm shadow-indigo-200">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+  <aside class="sidebar w-60 flex flex-col flex-shrink-0 border-r-2 border-dashed border-ink/60" style="background:linear-gradient(180deg,#fffbe0 0%,#fdfbf7 100%);">
+    <div class="px-5 pt-6 pb-4">
+      <div class="flex items-center gap-2.5" style="transform: rotate(-2deg);">
+        <div class="w-9 h-9 flex items-center justify-center bg-marker text-white font-marker text-lg"
+             style="border:2px solid #2d2d2d; box-shadow: 3px 3px 0 0 #2d2d2d; border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px;">
+          W
         </div>
-        <span class="font-semibold text-sm text-gray-900 tracking-tight">WeChatRSS</span>
+        <div>
+          <div class="font-marker text-lg leading-none">WeChatRSS</div>
+          <div class="text-xs opacity-60">公众号手札</div>
+        </div>
       </div>
     </div>
-    <nav class="flex-1 px-3 space-y-0.5">
+    <nav class="flex-1 px-3 space-y-1">
       <div class="nav-item active" onclick="showPage('tasks')" id="nav-tasks">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         任务
       </div>
       <div class="nav-item" onclick="showPage('digests')" id="nav-digests">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
         报告
       </div>
       <div class="nav-item" onclick="showPage('articles')" id="nav-articles">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         文章
       </div>
       <div class="nav-item" onclick="showPage('feeds')" id="nav-feeds">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
         订阅源
       </div>
     </nav>
-    <div class="px-3 pb-4 pt-2 border-t border-gray-100 mt-2">
-      <a href="https://rss.mustardnet.xyz" target="_blank" class="nav-item text-gray-400">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+    <div class="px-3 pb-5 pt-3 border-t-2 border-dashed border-ink/30 mt-2">
+      <a href="https://rss.mustardnet.xyz" target="_blank" class="nav-item" style="color:#2d5da1;">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         公众号管理
       </a>
     </div>
   </aside>
 
   <!-- Main -->
-  <main class="flex-1 overflow-y-auto main-content">
+  <main class="main-content flex-1 overflow-y-auto relative">
     <!-- Tasks Page -->
     <div id="page-tasks" class="p-8 max-w-4xl mx-auto space-y-8">
       <header class="flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-gray-900">任务</h1>
-        <button class="btn btn-secondary text-xs py-1.5 px-3" onclick="refreshStatus()">刷新状态</button>
+        <div>
+          <h1 class="font-marker text-3xl md:text-4xl">任务</h1>
+          <div class="text-sm opacity-70 mt-1">看看今天流水线跑得怎么样 ✏️</div>
+        </div>
+        <button class="btn btn-xs" onclick="refreshStatus()">刷新状态</button>
       </header>
 
       <!-- Pipeline -->
       <section class="pipeline-card">
-        <div class="relative z-10 flex items-center justify-between">
+        <div class="relative z-10 flex items-center justify-between gap-6 flex-wrap">
           <div>
-            <h2 class="text-base font-semibold text-white">完整流水线</h2>
-            <p class="text-indigo-200 text-xs mt-1">刷新 → 抓取 → 分析 → 邮件</p>
+            <h2 class="font-marker text-2xl">完整流水线</h2>
+            <p class="opacity-80 text-sm mt-1">刷新 → 抓取 → 分析 → 邮件</p>
           </div>
-          <button class="bg-white text-indigo-600 font-semibold px-5 py-2 rounded-lg text-sm hover:bg-indigo-50 transition-colors shadow-sm" id="btn-pipeline" onclick="runPipeline()">执行</button>
+          <button class="btn" id="btn-pipeline" onclick="runPipeline()" style="background:#fff9c4;">执行</button>
         </div>
-        <div id="pipeline-status" class="hidden relative z-10 mt-4 text-xs text-indigo-100 bg-white/10 rounded-lg px-4 py-3 backdrop-blur-sm"></div>
+        <div id="pipeline-status" class="hidden relative z-10 mt-4 text-sm px-4 py-3"
+             style="border:2px dashed rgba(253,251,247,0.5); border-radius: 14px 5px 16px 6px / 6px 14px 5px 16px;"></div>
       </section>
 
       <!-- Schedule -->
-      <section class="card">
-        <h2 class="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">每日自动执行</h2>
-        <div class="flex items-center justify-between schedule-row">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">08:30</span>
-            <span class="text-xs text-gray-500">刷新</span>
-          </div>
-          <div class="w-6 border-t border-dashed border-gray-200"></div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">08:55</span>
-            <span class="text-xs text-gray-500">抓取</span>
-          </div>
-          <div class="w-6 border-t border-dashed border-gray-200"></div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">09:00</span>
-            <span class="text-xs text-gray-500">分析 + 邮件</span>
-          </div>
-          <div class="w-6 border-t border-dashed border-gray-200"></div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-mono font-medium text-gray-900 bg-gray-50 border border-gray-100 px-2 py-1 rounded">10:00</span>
-            <span class="text-xs text-gray-500">补漏</span>
-          </div>
+      <section class="paper p-6 tape">
+        <h2 class="font-marker text-lg mb-4 flex items-center gap-2">每日自动执行 <span class="opacity-40">📌</span></h2>
+        <div class="flex items-center flex-wrap schedule-row">
+          <div class="schedule-pill"><span class="time">08:30</span><span class="label">刷新</span></div>
+          <span class="opacity-40">~~~</span>
+          <div class="schedule-pill"><span class="time">08:55</span><span class="label">抓取</span></div>
+          <span class="opacity-40">~~~</span>
+          <div class="schedule-pill"><span class="time">09:00</span><span class="label">分析 + 邮件</span></div>
+          <span class="opacity-40">~~~</span>
+          <div class="schedule-pill"><span class="time">10:00</span><span class="label">补漏</span></div>
         </div>
       </section>
     </div>
 
-    <!-- Digests (now called 报告) Page -->
+    <!-- Digests (报告) Page -->
     <div id="page-digests" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
-      <header class="flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-gray-900">报告</h1>
-        <span class="text-xs text-gray-400" id="digests-count"></span>
+      <header class="flex items-end justify-between gap-4">
+        <div>
+          <h1 class="font-marker text-3xl md:text-4xl">报告</h1>
+          <div class="text-sm opacity-70 mt-1">每天发出的每日摘要，都存在这里 📬</div>
+        </div>
+        <span class="text-sm opacity-60" id="digests-count"></span>
       </header>
-      <div id="digests-list" class="space-y-2">
-        <div class="text-gray-400 text-sm text-center py-16">加载中...</div>
+      <div id="digests-list" class="space-y-3">
+        <div class="text-sm opacity-50 text-center py-16">加载中...</div>
       </div>
-      <div id="digests-pagination" class="flex justify-center gap-1.5 pt-4"></div>
+      <div id="digests-pagination" class="flex justify-center gap-2 pt-4"></div>
 
       <!-- Digest modal -->
-      <div id="digest-modal" class="hidden fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl fade-in border border-gray-100">
-          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div id="digest-modal" class="hidden fixed inset-0 bg-ink/40 z-50 flex items-center justify-center p-4">
+        <div class="paper w-full max-w-3xl max-h-[85vh] flex flex-col fade-in" style="background:#fdfbf7;">
+          <div class="flex items-center justify-between px-6 py-4 border-b-2 border-dashed border-ink/30">
             <div class="min-w-0 flex-1">
-              <h2 id="digest-modal-title" class="text-sm font-semibold text-gray-900 truncate"></h2>
-              <div id="digest-modal-sub" class="text-xs text-gray-400 mt-0.5"></div>
+              <h2 id="digest-modal-title" class="font-marker text-lg truncate"></h2>
+              <div id="digest-modal-sub" class="text-xs opacity-60 mt-0.5"></div>
             </div>
-            <button onclick="closeDigestModal()" class="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors text-sm ml-3 flex-shrink-0">✕</button>
+            <button onclick="closeDigestModal()" class="btn btn-xs ml-3 flex-shrink-0">✕</button>
           </div>
-          <iframe id="digest-modal-iframe" class="flex-1 w-full rounded-b-xl" style="border:none;min-height:60vh;background:#f0f4f8;"></iframe>
+          <iframe id="digest-modal-iframe" class="flex-1 w-full" style="border:none;min-height:60vh;background:#f0f4f8;"></iframe>
         </div>
       </div>
     </div>
@@ -257,29 +468,31 @@
     <div id="page-articles" class="hidden h-full">
       <div class="flex h-full min-h-0">
         <!-- Left: feed picker -->
-        <aside class="w-60 border-r border-gray-100 bg-gradient-to-b from-gray-50/50 to-white flex-shrink-0 flex flex-col overflow-hidden">
+        <aside class="w-64 border-r-2 border-dashed border-ink/40 flex-shrink-0 flex flex-col overflow-hidden"
+               style="background:linear-gradient(180deg,#fffbe0 0%,#fdfbf7 100%);">
           <div class="px-5 pt-6 pb-3">
-            <h1 class="text-lg font-semibold text-gray-900">文章</h1>
+            <h1 class="font-marker text-2xl">文章</h1>
+            <div class="text-xs opacity-60 mt-0.5">按公众号翻阅 👀</div>
           </div>
           <div class="px-3 pb-4 flex-1 overflow-y-auto" id="article-feeds-panel">
-            <div class="text-gray-400 text-xs text-center py-8">加载中...</div>
+            <div class="text-xs opacity-50 text-center py-8">加载中...</div>
           </div>
         </aside>
 
         <!-- Right: articles list -->
         <div class="flex-1 overflow-y-auto">
           <div class="p-8 max-w-3xl mx-auto space-y-6">
-            <header class="flex items-center justify-between gap-3 flex-wrap">
+            <header class="flex items-end justify-between gap-3 flex-wrap">
               <div class="min-w-0">
-                <h2 id="articles-header-title" class="text-base font-semibold text-gray-900">全部公众号</h2>
-                <div id="articles-header-sub" class="text-xs text-gray-400 mt-0.5"></div>
+                <h2 id="articles-header-title" class="font-marker text-2xl">全部公众号</h2>
+                <div id="articles-header-sub" class="text-xs opacity-60 mt-0.5"></div>
               </div>
-              <input id="article-search" type="text" placeholder="搜索标题..." class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 text-xs w-52 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" oninput="searchArticles()" />
+              <input id="article-search" type="text" placeholder="搜索标题..." class="input-hand w-60" oninput="searchArticles()" />
             </header>
-            <div id="articles-list" class="space-y-1">
-              <div class="text-gray-400 text-sm text-center py-16">加载中...</div>
+            <div id="articles-list" class="space-y-3">
+              <div class="text-sm opacity-50 text-center py-16">加载中...</div>
             </div>
-            <div id="articles-pagination" class="flex justify-center gap-1.5 pt-4"></div>
+            <div id="articles-pagination" class="flex justify-center gap-2 pt-4"></div>
           </div>
         </div>
       </div>
@@ -287,33 +500,36 @@
 
     <!-- Feeds Page -->
     <div id="page-feeds" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
-      <header class="flex items-center justify-between">
-        <h1 class="text-lg font-semibold text-gray-900">订阅源</h1>
-        <button class="btn btn-primary text-xs" onclick="showAddFeed()">添加</button>
+      <header class="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 class="font-marker text-3xl md:text-4xl">订阅源</h1>
+          <div class="text-sm opacity-70 mt-1">管理你订阅的公众号 🎯</div>
+        </div>
+        <button class="btn" onclick="showAddFeed()">+ 添加</button>
       </header>
-      <div id="feeds-list" class="space-y-2">
-        <div class="text-gray-400 text-sm text-center py-16">加载中...</div>
+      <div id="feeds-list" class="space-y-3">
+        <div class="text-sm opacity-50 text-center py-16">加载中...</div>
       </div>
-      <div id="feed-modal" class="hidden fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-8">
-        <div class="bg-white rounded-xl w-full max-w-sm p-6 shadow-2xl fade-in border border-gray-100">
-          <h2 class="text-sm font-semibold text-gray-900 mb-5">添加订阅源</h2>
+      <div id="feed-modal" class="hidden fixed inset-0 bg-ink/40 z-50 flex items-center justify-center p-4">
+        <div class="paper w-full max-w-sm p-6 fade-in tack" style="background:#fdfbf7; transform: rotate(-1deg);">
+          <h2 class="font-marker text-xl mb-5">添加订阅源</h2>
           <div class="space-y-4">
             <div>
-              <label class="text-[11px] font-medium text-gray-400 mb-1.5 block">名称</label>
-              <input id="feed-name" type="text" placeholder="公众号名称" class="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" />
+              <label class="text-sm font-marker mb-1.5 block">名称</label>
+              <input id="feed-name" type="text" placeholder="公众号名称" class="input-hand w-full" />
             </div>
             <div>
-              <label class="text-[11px] font-medium text-gray-400 mb-1.5 block">RSS URL</label>
-              <input id="feed-url" type="text" placeholder="http://..." class="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" />
+              <label class="text-sm font-marker mb-1.5 block">RSS URL</label>
+              <input id="feed-url" type="text" placeholder="http://..." class="input-hand w-full" />
             </div>
             <div>
-              <label class="text-[11px] font-medium text-gray-400 mb-1.5 block">标题过滤（可选）</label>
-              <input id="feed-filter" type="text" placeholder="正则表达式" class="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-gray-300 transition-all" />
+              <label class="text-sm font-marker mb-1.5 block">标题过滤（可选）</label>
+              <input id="feed-filter" type="text" placeholder="正则表达式" class="input-hand w-full" />
             </div>
           </div>
           <div class="flex gap-2 mt-6">
-            <button class="btn btn-primary flex-1 text-xs" onclick="addFeed()">添加</button>
-            <button class="btn btn-secondary flex-1 text-xs" onclick="closeFeedModal()">取消</button>
+            <button class="btn flex-1" onclick="addFeed()">添加</button>
+            <button class="btn btn-secondary flex-1" onclick="closeFeedModal()">取消</button>
           </div>
         </div>
       </div>
