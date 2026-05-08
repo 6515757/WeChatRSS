@@ -70,19 +70,29 @@ export async function articleRoutes(app: FastifyInstance): Promise<void> {
   // 文章详情（含分析结果）
   app.get<{ Params: { id: string } }>('/articles/:id', async (req, reply) => {
     const db = getDb();
-    const article = await db.query.articles.findFirst({
-      where: eq(articles.id, req.params.id),
-    });
+
+    const articleRows = await db
+      .select()
+      .from(articles)
+      .where(eq(articles.id, req.params.id))
+      .limit(1);
+    const article = articleRows[0];
 
     if (!article) return reply.status(404).send({ error: '文章不存在' });
 
-    const analysis = await db.query.analyses.findFirst({
-      where: eq(analyses.articleId, article.id),
-    });
+    const analysisRows = await db
+      .select()
+      .from(analyses)
+      .where(eq(analyses.articleId, article.id))
+      .limit(1);
+    const analysis = analysisRows[0];
 
-    const feed = await db.query.feeds.findFirst({
-      where: eq(feeds.id, article.feedId),
-    });
+    const feedRows = await db
+      .select()
+      .from(feeds)
+      .where(eq(feeds.id, article.feedId))
+      .limit(1);
+    const feed = feedRows[0];
 
     return {
       ...article,
@@ -92,6 +102,7 @@ export async function articleRoutes(app: FastifyInstance): Promise<void> {
             ...analysis,
             topics: JSON.parse(analysis.topics || '[]'),
             keyPoints: JSON.parse(analysis.keyPoints || '[]'),
+            keyData: JSON.parse(analysis.keyData || '[]'),
           }
         : null,
     };
