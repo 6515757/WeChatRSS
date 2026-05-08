@@ -1,7 +1,8 @@
 import nodemailer from 'nodemailer';
 import { eq, gte, desc } from 'drizzle-orm';
-import { getDb } from '../db';
-import { articles, analyses, feeds } from '../db/schema';
+import { v4 as uuidv4 } from 'uuid';
+import { getDb, saveDatabaseSync } from '../db';
+import { articles, analyses, feeds, emailDigests, type NewEmailDigest } from '../db/schema';
 import { config } from '../config';
 import { buildEmailHtml } from './template';
 
@@ -16,6 +17,7 @@ const transporter = nodemailer.createTransport({
 });
 
 interface ArticleWithAnalysis {
+  articleId: string;
   title: string;
   url: string;
   feedName: string;
@@ -26,11 +28,12 @@ interface ArticleWithAnalysis {
   importanceScore: number;
 }
 
-async function getAnalyzedArticles(since: string): Promise<ArticleWithAnalysis[]> {
+async function queryAnalyzedArticles(since?: string): Promise<ArticleWithAnalysis[]> {
   const db = getDb();
 
-  const rows = await db
+  const base = db
     .select({
+      articleId: articles.id,
       title: articles.title,
       url: articles.url,
       feedName: feeds.name,
@@ -42,11 +45,14 @@ async function getAnalyzedArticles(since: string): Promise<ArticleWithAnalysis[]
     })
     .from(analyses)
     .innerJoin(articles, eq(analyses.articleId, articles.id))
-    .innerJoin(feeds, eq(articles.feedId, feeds.id))
-    .where(gte(analyses.analyzedAt, since))
-    .orderBy(desc(analyses.importanceScore));
+    .innerJoin(feeds, eq(articles.feedId, feeds.id));
+
+  const rows = since
+    ? await base.where(gte(analyses.analyzedAt, since)).orderBy(desc(analyses.importanceScore))
+    : await base.orderBy(desc(analyses.importanceScore));
 
   return rows.map((r) => ({
+    articleId: r.articleId,
     title: r.title,
     url: r.url,
     feedName: r.feedName,
@@ -58,115 +64,33 @@ async function getAnalyzedArticles(since: string): Promise<ArticleWithAnalysis[]
   }));
 }
 
-export async function sendDailyEmail(): Promise<void> {
-  // Get today's analyzed articles
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const since = today.toISOString();
-
-  const articleList = await getAnalyzedArticles(since);
-
-  if (articleList.length === 0) {
-    console.log('[Mailer] No articles to send today');
-    return;
+function groupByFeed(list: ArticleWithAnalysis[]) {
+  const map = new Map<string, ArticleWithAnalysis[]>();
+  for (const a of list) {
+    const bucket = map.get(a.feedName) || [];
+    bucket.push(a);
+    map.set(a.feedName, bucket);
   }
-
-  // Group by feed
-  const groupMap = new Map<string, ArticleWithAnalysis[]>();
-  for (const a of articleList) {
-    const list = groupMap.get(a.feedName) || [];
-    list.push(a);
-    groupMap.set(a.feedName, list);
-  }
-
-  const feedGroups = Array.from(groupMap.entries()).map(([feedName, arts]) => ({
-    feedName,
-    articles: arts,
-  }));
-
-  const dateStr = today.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
-  const html = buildEmailHtml(
-    dateStr,
-    articleList.length,
-    feedGroups.length,
-    feedGroups
-  );
-
-  const subject = `微信公众号每日摘要 - ${dateStr} (${articleList.length}篇)`;
-
-  try {
-    await transporter.sendMail({
-      from: `"WeChatRSS" <${config.mail.user}>`,
-      to: config.mail.to,
-      subject,
-      html,
-    });
-    console.log('[Mailer] Email sent to ' + config.mail.to);
-  } catch (err) {
-    console.error('[Mailer] Send failed:', err);
-    throw err;
-  }
+  return Array.from(map.entries()).map(([feedName, arts]) => ({ feedName, articles: arts }));
 }
 
-// Send email for all analyzed articles (not just today)
-export async function sendAllAnalyzedEmail(): Promise<void> {
-  const db = getDb();
+// 「有意义的」分析：排除 Content unavailable / Analysis failed 的占位记录
+function onlyMeaningful(list: ArticleWithAnalysis[]): ArticleWithAnalysis[] {
+  return list.filter((a) => a.summary && a.summary !== 'Content unavailable' && a.summary !== 'Analysis failed');
+}
 
-  const rows = await db
-    .select({
-      title: articles.title,
-      url: articles.url,
-      feedName: feeds.name,
-      summary: analyses.summary,
-      topics: analyses.topics,
-      keyPoints: analyses.keyPoints,
-      keyData: analyses.keyData,
-      importanceScore: analyses.importanceScore,
-    })
-    .from(analyses)
-    .innerJoin(articles, eq(analyses.articleId, articles.id))
-    .innerJoin(feeds, eq(articles.feedId, feeds.id))
-    .orderBy(desc(analyses.importanceScore));
-
-  const articleList: ArticleWithAnalysis[] = rows.map((r) => ({
-    title: r.title,
-    url: r.url,
-    feedName: r.feedName,
-    summary: r.summary || '',
-    topics: JSON.parse(r.topics || '[]'),
-    keyPoints: JSON.parse(r.keyPoints || '[]'),
-    keyData: JSON.parse(r.keyData || '[]'),
-    importanceScore: r.importanceScore || 0,
-  }));
+async function sendAndArchive(options: {
+  articleList: ArticleWithAnalysis[];
+  dateStr: string;
+}): Promise<void> {
+  const { articleList, dateStr } = options;
 
   if (articleList.length === 0) {
-    console.log('[Mailer] No analyzed articles');
+    console.log('[Mailer] 无可发送内容');
     return;
   }
 
-  const groupMap = new Map<string, ArticleWithAnalysis[]>();
-  for (const a of articleList) {
-    const list = groupMap.get(a.feedName) || [];
-    list.push(a);
-    groupMap.set(a.feedName, list);
-  }
-
-  const feedGroups = Array.from(groupMap.entries()).map(([feedName, arts]) => ({
-    feedName,
-    articles: arts,
-  }));
-
-  const dateStr = new Date().toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
+  const feedGroups = groupByFeed(articleList);
   const html = buildEmailHtml(dateStr, articleList.length, feedGroups.length, feedGroups);
   const subject = `微信公众号每日摘要 - ${dateStr} (${articleList.length}篇)`;
 
@@ -177,4 +101,64 @@ export async function sendAllAnalyzedEmail(): Promise<void> {
     html,
   });
   console.log('[Mailer] Email sent to ' + config.mail.to);
+
+  // 归档：发送成功后落一条
+  try {
+    const db = getDb();
+    const digest: NewEmailDigest = {
+      id: uuidv4(),
+      subject,
+      html,
+      recipient: config.mail.to,
+      articleCount: articleList.length,
+      feedCount: feedGroups.length,
+      articleIds: JSON.stringify(articleList.map((a) => a.articleId)),
+      sentAt: new Date().toISOString(),
+    };
+    await db.insert(emailDigests).values(digest);
+    saveDatabaseSync();
+  } catch (err) {
+    // 归档失败不影响已发送的结果
+    console.error('[Mailer] 归档失败（邮件已发送）:', err);
+  }
+}
+
+export async function sendDailyEmail(): Promise<void> {
+  // Get today's analyzed articles
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const since = today.toISOString();
+
+  const articleList = onlyMeaningful(await queryAnalyzedArticles(since));
+
+  if (articleList.length === 0) {
+    console.log('[Mailer] No articles to send today');
+    return;
+  }
+
+  const dateStr = today.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  await sendAndArchive({ articleList, dateStr });
+}
+
+// Send email for all analyzed articles (not just today)
+export async function sendAllAnalyzedEmail(): Promise<void> {
+  const articleList = onlyMeaningful(await queryAnalyzedArticles());
+
+  if (articleList.length === 0) {
+    console.log('[Mailer] No analyzed articles');
+    return;
+  }
+
+  const dateStr = new Date().toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  await sendAndArchive({ articleList, dateStr });
 }

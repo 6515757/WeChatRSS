@@ -53,6 +53,18 @@ export const reports = sqliteTable('reports', {
   createdAt: text('created_at').notNull(),
 });
 
+// 邮件归档表：每次成功发送每日摘要邮件时落一条，UI 供历史查看
+export const emailDigests = sqliteTable('email_digests', {
+  id: text('id').primaryKey(),
+  subject: text('subject').notNull(),
+  html: text('html').notNull(),
+  recipient: text('recipient').notNull(),
+  articleCount: integer('article_count').notNull().default(0),
+  feedCount: integer('feed_count').notNull().default(0),
+  articleIds: text('article_ids').notNull().default('[]'), // JSON 数组
+  sentAt: text('sent_at').notNull(),
+});
+
 // 类型导出
 export type Feed = typeof feeds.$inferSelect;
 export type NewFeed = typeof feeds.$inferInsert;
@@ -62,3 +74,5 @@ export type Analysis = typeof analyses.$inferSelect;
 export type NewAnalysis = typeof analyses.$inferInsert;
 export type Report = typeof reports.$inferSelect;
 export type NewReport = typeof reports.$inferInsert;
+export type EmailDigest = typeof emailDigests.$inferSelect;
+export type NewEmailDigest = typeof emailDigests.$inferInsert;

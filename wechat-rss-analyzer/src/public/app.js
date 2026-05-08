@@ -9,7 +9,7 @@ let statusPollTimer = null;
 // ─── Navigation ───────────────────────────────────────────────────────────────
 
 function showPage(page) {
-  ['tasks', 'reports', 'articles', 'feeds'].forEach(p => {
+  ['tasks', 'reports', 'articles', 'digests', 'feeds'].forEach(p => {
     document.getElementById(`page-${p}`).classList.add('hidden');
     document.getElementById(`nav-${p}`).classList.remove('active');
   });
@@ -21,6 +21,7 @@ function showPage(page) {
   else { stopStatusPoll(); }
   if (page === 'reports') loadReports();
   if (page === 'articles') { ensureFeedFilterOptions(); loadArticles(); }
+  if (page === 'digests') loadDigests();
   if (page === 'feeds') loadFeeds();
 }
 
@@ -344,17 +345,25 @@ async function loadArticles(page = articlePage) {
         statusBadge = '<span class="badge bg-gray-100 text-gray-500">未分析</span>';
       }
       return `
-        <div class="card py-3 px-4">
+        <div class="card article-card py-3 px-4" data-article-id="${escHtml(a.id)}" onclick="toggleArticle(this)">
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
-              <a href="${escHtml(a.url)}" target="_blank" class="font-medium text-gray-900 hover:text-blue-600 text-sm line-clamp-1">${escHtml(a.title)}</a>
-              <div class="flex items-center gap-3 mt-1">
+              <div class="flex items-center gap-2">
+                <svg class="chevron flex-shrink-0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <span class="font-medium text-gray-900 text-sm line-clamp-1">${escHtml(a.title)}</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1 ml-[18px]">
                 <span class="text-xs text-gray-400">${escHtml(a.feedName || a.feed?.name || '')}</span>
                 <span class="text-xs text-gray-400">${a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('zh-CN') : ''}</span>
                 ${statusBadge}
               </div>
             </div>
             ${score != null ? `<span class="text-sm font-bold ${scoreColor} flex-shrink-0">${Number(score).toFixed(1)}</span>` : ''}
+          </div>
+          <div class="article-detail mt-0 ml-[18px]">
+            <div class="pt-3 mt-3 border-t border-gray-100 article-detail-body">
+              <div class="text-xs text-gray-400">展开加载...</div>
+            </div>
           </div>
         </div>
       `;
@@ -378,6 +387,170 @@ function renderPagination(current, total) {
     ...pages.map(p => `<button class="btn text-xs ${p === current ? 'btn-primary' : 'btn-secondary'}" onclick="loadArticles(${p})">${p}</button>`),
     current < total ? `<button class="btn btn-secondary text-xs" onclick="loadArticles(${current + 1})">›</button>` : '',
   ].join('');
+}
+
+// 卡片展开/折叠 + 按需加载分析详情
+const articleDetailCache = {};
+async function toggleArticle(cardEl) {
+  if (!cardEl) return;
+  const id = cardEl.dataset.articleId;
+  const willOpen = !cardEl.classList.contains('open');
+  // 收起其它已展开卡片（一次只看一个）
+  document.querySelectorAll('.article-card.open').forEach(el => {
+    if (el !== cardEl) el.classList.remove('open');
+  });
+  cardEl.classList.toggle('open', willOpen);
+  if (!willOpen) return;
+  const body = cardEl.querySelector('.article-detail-body');
+  if (!body) return;
+  if (articleDetailCache[id]) {
+    body.innerHTML = articleDetailCache[id];
+    return;
+  }
+  body.innerHTML = '<div class="text-xs text-gray-400">加载中...</div>';
+  try {
+    const data = await get(`/articles/${encodeURIComponent(id)}`);
+    const html = renderArticleDetail(data);
+    articleDetailCache[id] = html;
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<div class="text-xs text-red-500">加载失败: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderArticleDetail(a) {
+  const an = a.analysis;
+  // 无分析 / 占位情况
+  if (!an) {
+    return `
+      <div class="analysis-section">
+        <div class="text-gray-500">暂未生成分析。</div>
+        <a href="${escHtml(a.url)}" target="_blank" class="text-xs text-indigo-600 hover:underline mt-2 inline-block">阅读原文 →</a>
+      </div>`;
+  }
+  if (an.summary === 'Content unavailable') {
+    return `
+      <div class="analysis-section">
+        <div class="text-gray-500">RSS 源没有提供正文，无法生成分析。</div>
+        <a href="${escHtml(a.url)}" target="_blank" class="text-xs text-indigo-600 hover:underline mt-2 inline-block">阅读原文 →</a>
+      </div>`;
+  }
+  if (an.summary === 'Analysis failed') {
+    const raw = an.rawResponse ? String(an.rawResponse) : '';
+    return `
+      <div class="analysis-section">
+        <div class="text-red-500 mb-2">LLM 分析失败。</div>
+        ${raw ? `<details class="text-xs text-gray-500"><summary class="cursor-pointer">错误详情</summary><pre class="whitespace-pre-wrap mt-2 p-2 bg-gray-50 rounded border border-gray-100">${escHtml(raw.slice(0, 2000))}</pre></details>` : ''}
+        <a href="${escHtml(a.url)}" target="_blank" class="text-xs text-indigo-600 hover:underline mt-2 inline-block">阅读原文 →</a>
+      </div>`;
+  }
+
+  const topics = Array.isArray(an.topics) ? an.topics : [];
+  const keyPoints = Array.isArray(an.keyPoints) ? an.keyPoints : [];
+  // keyData 可能是 JSON 字符串 也可能是数组
+  let keyData = an.keyData;
+  if (typeof keyData === 'string') {
+    try { keyData = JSON.parse(keyData); } catch { keyData = []; }
+  }
+  if (!Array.isArray(keyData)) keyData = [];
+
+  const topicsHtml = topics.length
+    ? `<div class="mb-3">${topics.map(t => `<span class="topic-chip">${escHtml(t)}</span>`).join('')}</div>`
+    : '';
+  const summaryHtml = an.summary
+    ? `<div class="mb-3"><span class="label">核心内容</span>${escHtml(an.summary)}</div>`
+    : '';
+  const keyPointsHtml = keyPoints.length
+    ? `<div class="mb-3"><span class="label">关键观点</span><ul class="key-list">${keyPoints.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul></div>`
+    : '';
+  const keyDataHtml = keyData.length
+    ? `<div class="mb-3"><span class="label">关键数据</span><ul class="key-list">${keyData.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul></div>`
+    : '';
+  const scoreHtml = an.importanceScore != null
+    ? `<div class="mb-3"><span class="label">重要性</span>${Number(an.importanceScore).toFixed(1)} / 10</div>`
+    : '';
+
+  return `
+    <div class="analysis-section">
+      ${topicsHtml}
+      ${summaryHtml}
+      ${keyPointsHtml}
+      ${keyDataHtml}
+      ${scoreHtml}
+      <a href="${escHtml(a.url)}" target="_blank" class="text-xs text-indigo-600 hover:underline">阅读原文 →</a>
+    </div>`;
+}
+
+// ─── Digests ──────────────────────────────────────────────────────────────────
+
+let digestPage = 1;
+async function loadDigests(page = 1) {
+  digestPage = page;
+  const el = document.getElementById('digests-list');
+  el.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">加载中...</div>';
+  try {
+    const params = new URLSearchParams({ page, pageSize: 20 });
+    const data = await get(`/digests?${params}`);
+    const items = data.data || [];
+    const total = data.total || items.length;
+    document.getElementById('digests-count').textContent = total > 0 ? `共 ${total} 封` : '';
+    if (items.length === 0) {
+      el.innerHTML = '<div class="text-gray-400 text-sm text-center py-8">暂无已发送的邮件</div>';
+      document.getElementById('digests-pagination').innerHTML = '';
+      return;
+    }
+    el.innerHTML = items.map(d => `
+      <div class="card hover:border-gray-200 cursor-pointer transition-colors" onclick="openDigest('${escHtml(d.id)}')">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-medium text-gray-900 truncate">${escHtml(d.subject)}</div>
+            <div class="text-xs text-gray-400 mt-1">
+              ${new Date(d.sentAt).toLocaleString('zh-CN')}
+              · ${d.articleCount} 篇 · ${d.feedCount} 个公众号
+              · 发至 ${escHtml(d.recipient || '')}
+            </div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+    `).join('');
+
+    // 分页
+    const totalPages = Math.ceil(total / 20);
+    const pEl = document.getElementById('digests-pagination');
+    if (totalPages <= 1) { pEl.innerHTML = ''; return; }
+    const pages = [];
+    for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) pages.push(i);
+    pEl.innerHTML = [
+      page > 1 ? `<button class="btn btn-secondary text-xs" onclick="loadDigests(${page - 1})">‹</button>` : '',
+      ...pages.map(p => `<button class="btn text-xs ${p === page ? 'btn-primary' : 'btn-secondary'}" onclick="loadDigests(${p})">${p}</button>`),
+      page < totalPages ? `<button class="btn btn-secondary text-xs" onclick="loadDigests(${page + 1})">›</button>` : '',
+    ].join('');
+  } catch (e) {
+    el.innerHTML = `<div class="text-red-400 text-sm text-center py-8">加载失败: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function openDigest(id) {
+  try {
+    const data = await get(`/digests/${encodeURIComponent(id)}`);
+    document.getElementById('digest-modal-title').textContent = data.subject || '邮件';
+    const sub = [];
+    if (data.sentAt) sub.push(new Date(data.sentAt).toLocaleString('zh-CN'));
+    if (data.articleCount != null) sub.push(`${data.articleCount} 篇`);
+    if (data.feedCount != null) sub.push(`${data.feedCount} 个公众号`);
+    if (data.recipient) sub.push(`发至 ${data.recipient}`);
+    document.getElementById('digest-modal-sub').textContent = sub.join(' · ');
+    document.getElementById('digest-modal-iframe').src = `/api/digests/${encodeURIComponent(id)}/html`;
+    document.getElementById('digest-modal').classList.remove('hidden');
+  } catch (e) {
+    showToast('打开失败: ' + e.message, 'error');
+  }
+}
+
+function closeDigestModal() {
+  document.getElementById('digest-modal').classList.add('hidden');
+  document.getElementById('digest-modal-iframe').src = 'about:blank';
 }
 
 // ─── Feeds ────────────────────────────────────────────────────────────────────
