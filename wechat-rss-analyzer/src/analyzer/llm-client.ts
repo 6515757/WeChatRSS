@@ -80,6 +80,12 @@ class LLMClient {
     const repaired = repairJson(body);
     try {
       return JSON.parse(repaired) as T;
+    } catch {}
+
+    // 4) 最后兜底：LLM 输出被截断。尝试补齐未闭合的字符串 / 数组 / 对象，让解析至少能返回已抓到的部分。
+    const salvaged = salvageTruncated(repaired);
+    try {
+      return JSON.parse(salvaged) as T;
     } catch (err) {
       const snippet = text.length > 2000 ? text.slice(0, 2000) + '\n...[truncated]' : text;
       throw new Error(
@@ -87,6 +93,59 @@ class LLMClient {
       );
     }
   }
+}
+
+/**
+ * 对"被截断的 JSON"做抢救：
+ * - 如果当前还在字符串里，先闭合引号
+ * - 如果最后一个 token 是 ','（或悬空字段值），回退到前一个完整 token
+ * - 从右到左补齐未关闭的 `]` 和 `}`
+ */
+function salvageTruncated(input: string): string {
+  let s = input;
+
+  // 扫描栈：记录未闭合的 '{' / '['，以及当前是否在字符串里
+  const stack: string[] = [];
+  let inStr = false;
+  let escape = false;
+  let lastStructuralIdx = -1; // 最近一次完整的结构点（逗号/冒号/括号之后）
+
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inStr = false; }
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{' || ch === '[') { stack.push(ch); continue; }
+    if (ch === '}' || ch === ']') { stack.pop(); lastStructuralIdx = i; continue; }
+    if (ch === ',') lastStructuralIdx = i;
+  }
+
+  // 1) 如果仍在字符串里，截到字符串开始前的最近结构点
+  if (inStr) {
+    // 找到最后一个未转义的 `"`，将该 `"` 之前（且 >= lastStructuralIdx）的部分截出
+    let cut = s.lastIndexOf('"');
+    while (cut > 0 && s[cut - 1] === '\\') cut = s.lastIndexOf('"', cut - 1);
+    if (cut >= 0) s = s.slice(0, cut);
+  }
+
+  // 2) 砍掉末尾的逗号 / 不完整字段（: 之后没值的情况）
+  s = s.replace(/\s*$/, '');
+  s = s.replace(/[,]\s*$/, '');
+  // 若末尾是 `"xxx":` 这种 key-without-value，砍掉这段
+  s = s.replace(/"[^"\n]*"\s*:\s*$/, '');
+  s = s.replace(/[,]\s*$/, '');
+
+  // 3) 用栈补齐未关闭的 `]` / `}`
+  while (stack.length) {
+    const top = stack.pop();
+    s += top === '{' ? '}' : ']';
+  }
+
+  return s;
 }
 
 // 简单的 JSON 修复：处理中文/花引号、字符串内部裸双引号、以及字符串内部的裸换行。
