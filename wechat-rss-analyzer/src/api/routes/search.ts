@@ -114,7 +114,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
 
     let llmResult: LlmSearchResult;
     try {
-      const raw = await llmClient.chat(SEARCH_SYSTEM, prompt, { maxTokens: 3072, temperature: 0.2 });
+      const raw = await llmClient.chat(SEARCH_SYSTEM, prompt, { maxTokens: 8000, temperature: 0.2 });
       llmResult = llmClient.parseJSON<LlmSearchResult>(raw);
     } catch (err) {
       return reply.status(500).send({ error: 'LLM 搜索失败: ' + (err as Error).message });
