@@ -82,3 +82,55 @@ export function buildReportPrompt(
 文章列表：
 ${articlesText}`;
 }
+
+
+// ─── 主题搜索 ─────────────────────────────────────────────────────────────────
+
+export const SEARCH_SYSTEM = `你是一个微信公众号文章的主题搜索助手。
+用户会给你一个主题（query）和一组待筛选的文章（含标题、公众号、摘要、主题标签）。
+
+你的任务：
+1. 挑选出与主题"真正相关"的文章。宁少勿滥——如果文章只是蹭到一个词但内容无关，不要选。
+2. 对每篇选中的文章给出 0-10 的相关度分数（score）和一句简短的 reason（不超过 30 字），说明为什么相关。
+3. 给出一段整体 overview（100-200 字），概括这段时间里与该主题相关的公众号讨论了什么、主要观点和分歧。
+
+严格返回以下 JSON 结构，不要用 Markdown 代码块包裹：
+
+{
+  "overview": "整体观察，100-200 字",
+  "hits": [
+    { "id": "文章id（必须使用输入提供的 id，不能修改）", "score": 8.5, "reason": "原因简述" }
+  ]
+}
+
+重要：
+- id 必须原样引用，不要更改、合并或虚构
+- 如果没有任何相关文章，hits 返回空数组 []，overview 简要说明没有相关内容
+- 所有字符串中请使用中文引号""''，不要使用英文双引号
+- 只返回 JSON，不要有其它说明`;
+
+export function buildSearchPrompt(
+  query: string,
+  days: number,
+  candidates: Array<{ id: string; title: string; feedName: string; summary: string; topics: string[] }>,
+): string {
+  const list = candidates
+    .map((c, i) => {
+      const topics = (c.topics || []).join('、');
+      return (
+        (i + 1) + '. id=' + c.id + '\n' +
+        '   公众号：' + c.feedName + '\n' +
+        '   标题：' + c.title + '\n' +
+        (topics ? '   主题：' + topics + '\n' : '') +
+        '   摘要：' + c.summary
+      );
+    })
+    .join('\n\n');
+
+  return (
+    '搜索主题：' + query + '\n' +
+    '时间范围：最近 ' + days + ' 天\n' +
+    '候选文章数：' + candidates.length + '\n\n' +
+    '候选文章列表：\n' + list
+  );
+}

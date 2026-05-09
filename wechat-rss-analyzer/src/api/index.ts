@@ -8,6 +8,7 @@ import { articleRoutes } from './routes/articles';
 import { reportRoutes } from './routes/reports';
 import { taskRoutes } from './routes/tasks';
 import { digestRoutes } from './routes/digests';
+import { searchRoutes } from './routes/search';
 
 export async function createServer() {
   const app = Fastify({
@@ -44,6 +45,7 @@ export async function createServer() {
   await app.register(reportRoutes, { prefix: '/api' });
   await app.register(taskRoutes, { prefix: '/api' });
   await app.register(digestRoutes, { prefix: '/api' });
+  await app.register(searchRoutes, { prefix: '/api' });
 
   return app;
 }
