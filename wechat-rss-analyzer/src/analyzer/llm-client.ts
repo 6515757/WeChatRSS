@@ -97,55 +97,68 @@ class LLMClient {
 
 /**
  * 对"被截断的 JSON"做抢救：
- * - 如果当前还在字符串里，先闭合引号
- * - 如果最后一个 token 是 ','（或悬空字段值），回退到前一个完整 token
- * - 从右到左补齐未关闭的 `]` 和 `}`
+ * 策略：先扫一遍，收集所有"安全切断点"（字符串外的 `,`、`}`、`]`），
+ * 从最靠后的切点开始回退重试，补齐未关闭的容器，能 parse 就返回。
  */
 function salvageTruncated(input: string): string {
-  let s = input;
+  // 如果首次直接闭合就能 parse，立即返回（常见情况）
+  const direct = closeUnclosed(input);
+  try { JSON.parse(direct); return direct; } catch {}
 
-  // 扫描栈：记录未闭合的 '{' / '['，以及当前是否在字符串里
+  // 收集候选切断位置
+  const cutPoints: Array<{ idx: number; inclusive: boolean }> = [];
+  let inStr = false;
+  let escape = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (inStr) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === ',') cutPoints.push({ idx: i, inclusive: false }); // 切到逗号前
+    else if (ch === '}' || ch === ']') cutPoints.push({ idx: i, inclusive: true }); // 切到闭括号后
+  }
+
+  // 从最靠后的切点开始尝试
+  for (let k = cutPoints.length - 1; k >= 0; k--) {
+    const p = cutPoints[k];
+    let candidate = input.slice(0, p.inclusive ? p.idx + 1 : p.idx);
+    candidate = candidate.replace(/[,\s]+$/, '');
+    const closed = closeUnclosed(candidate);
+    try { JSON.parse(closed); return closed; } catch {}
+  }
+
+  // 全部尝试失败，返回原始 direct 让外层抛错
+  return direct;
+}
+
+/** 扫描输入，若在字符串里就补 `"`，然后按栈补齐 `]` / `}` */
+function closeUnclosed(s: string): string {
   const stack: string[] = [];
   let inStr = false;
   let escape = false;
-  let lastStructuralIdx = -1; // 最近一次完整的结构点（逗号/冒号/括号之后）
-
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
     if (inStr) {
       if (escape) { escape = false; continue; }
       if (ch === '\\') { escape = true; continue; }
-      if (ch === '"') { inStr = false; }
+      if (ch === '"') inStr = false;
       continue;
     }
-    if (ch === '"') { inStr = true; continue; }
-    if (ch === '{' || ch === '[') { stack.push(ch); continue; }
-    if (ch === '}' || ch === ']') { stack.pop(); lastStructuralIdx = i; continue; }
-    if (ch === ',') lastStructuralIdx = i;
+    if (ch === '"') inStr = true;
+    else if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
   }
-
-  // 1) 如果仍在字符串里，截到字符串开始前的最近结构点
-  if (inStr) {
-    // 找到最后一个未转义的 `"`，将该 `"` 之前（且 >= lastStructuralIdx）的部分截出
-    let cut = s.lastIndexOf('"');
-    while (cut > 0 && s[cut - 1] === '\\') cut = s.lastIndexOf('"', cut - 1);
-    if (cut >= 0) s = s.slice(0, cut);
-  }
-
-  // 2) 砍掉末尾的逗号 / 不完整字段（: 之后没值的情况）
-  s = s.replace(/\s*$/, '');
-  s = s.replace(/[,]\s*$/, '');
-  // 若末尾是 `"xxx":` 这种 key-without-value，砍掉这段
-  s = s.replace(/"[^"\n]*"\s*:\s*$/, '');
-  s = s.replace(/[,]\s*$/, '');
-
-  // 3) 用栈补齐未关闭的 `]` / `}`
+  let out = s;
+  if (inStr) out += '"';
   while (stack.length) {
     const top = stack.pop();
-    s += top === '{' ? '}' : ']';
+    out += top === '{' ? '}' : ']';
   }
-
-  return s;
+  return out;
 }
 
 // 简单的 JSON 修复：处理中文/花引号、字符串内部裸双引号、以及字符串内部的裸换行。

@@ -118,12 +118,14 @@ export function buildSearchPrompt(
   const list = candidates
     .map((c, i) => {
       const topics = (c.topics || []).join('、');
+      // 限制 summary 长度，避免 prompt 过大 + 避免 LLM 输出空间不足
+      const summary = c.summary && c.summary.length > 160 ? c.summary.slice(0, 160) + '…' : (c.summary || '');
       return (
         (i + 1) + '. id=' + c.id + '\n' +
         '   公众号：' + c.feedName + '\n' +
         '   标题：' + c.title + '\n' +
         (topics ? '   主题：' + topics + '\n' : '') +
-        '   摘要：' + c.summary
+        '   摘要：' + summary
       );
     })
     .join('\n\n');
