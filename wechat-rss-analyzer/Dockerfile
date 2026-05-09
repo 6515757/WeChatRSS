@@ -1,5 +1,9 @@
 FROM node:20-alpine
 
+# 时区数据（cron 按 TZ 环境变量解析本地时间需要）
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Shanghai
+
 WORKDIR /app
 
 # 安装依赖

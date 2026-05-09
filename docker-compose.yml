@@ -23,6 +23,7 @@ services:
     volumes:
       - ./analyzer-data:/app/data
     environment:
+      - TZ=Asia/Shanghai
       - DATABASE_PATH=/app/data/wechat-rss.db
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_BASE_URL=${LLM_BASE_URL:-https://api.ikuncode.cc/v1}
