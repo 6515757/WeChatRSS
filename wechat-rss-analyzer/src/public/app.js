@@ -6,7 +6,7 @@ let articleFeedId = '';
 let statusPollTimer = null;
 
 function showPage(page) {
-  ['tasks', 'articles', 'digests', 'feeds'].forEach(p => {
+  ['tasks', 'articles', 'search', 'digests', 'feeds'].forEach(p => {
     const pageEl = document.getElementById('page-' + p);
     if (pageEl) pageEl.classList.add('hidden');
     const navEl = document.getElementById('nav-' + p);
@@ -477,3 +477,109 @@ function escHtml(str) {
 }
 
 showPage('tasks');
+
+// ─── Search (主题搜索) ────────────────────────────────────────────────────────
+
+let searchRunning = false;
+
+async function runSearch() {
+  if (searchRunning) return;
+  const qEl = document.getElementById('search-query');
+  const dEl = document.getElementById('search-days');
+  const query = (qEl.value || '').trim();
+  const days = parseInt(dEl.value || '30', 10);
+  if (!query) { showToast('请输入搜索主题', 'error'); return; }
+
+  const btn = document.getElementById('btn-search');
+  const resultEl = document.getElementById('search-result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner">⟳</span> 搜索中...';
+  resultEl.innerHTML = '<div class="paper p-6 text-sm opacity-70">AI 正在翻阅最近 ' + days + ' 天的文章，找和「' + escHtml(query) + '」有关的内容...</div>';
+  searchRunning = true;
+
+  try {
+    const res = await fetch(API + '/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, days }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || ('HTTP ' + res.status));
+    }
+    const data = await res.json();
+    renderSearchResult(data);
+  } catch (e) {
+    resultEl.innerHTML = '<div class="paper p-6 text-red-500">搜索失败: ' + escHtml(e.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 搜索';
+    searchRunning = false;
+  }
+}
+
+function renderSearchResult(data) {
+  const el = document.getElementById('search-result');
+  const q = escHtml(data.query || '');
+  const statsBits = [];
+  statsBits.push('时间范围：最近 ' + data.days + ' 天');
+  statsBits.push('候选 ' + (data.searched || 0) + ' / ' + (data.totalAnalyzed || 0) + ' 篇');
+  statsBits.push('命中 ' + (data.total || 0) + ' 篇');
+  if (data.cached) statsBits.push('来自缓存');
+  if (data.prefiltered) statsBits.push('已预筛');
+
+  const overviewHtml = data.overview
+    ? '<div class="paper postit p-6 -rotate-1"><div class="flex items-center gap-2 mb-3"><span class="font-marker text-lg">搜索报告</span><span class="text-xs opacity-60">关于「' + q + '」</span></div><div class="analysis-section" style="font-size:1.05rem;line-height:1.9;">' + escHtml(data.overview) + '</div></div>'
+    : '';
+
+  const statsHtml = '<div class="text-xs opacity-70 flex items-center gap-2 flex-wrap">' +
+    statsBits.map(b => '<span class="badge">' + escHtml(b) + '</span>').join('') +
+    '</div>';
+
+  if (!data.groups || data.groups.length === 0) {
+    el.innerHTML = overviewHtml + statsHtml +
+      '<div class="paper p-6 text-center opacity-70">没有命中的文章。换个说法，或者扩大时间范围试试？</div>';
+    return;
+  }
+
+  const groupsHtml = data.groups.map((g, gi) => {
+    const top = g.articles[0] ? Number(g.articles[0].matchScore).toFixed(1) : '';
+    const rot = (gi % 2 === 0) ? '-rotate-1' : 'rotate-1';
+    const head =
+      '<div class="flex items-end justify-between gap-3 flex-wrap mb-3">' +
+        '<div class="flex items-center gap-3">' +
+          '<span class="font-marker text-xl">' + escHtml(g.feedName) + '</span>' +
+          '<span class="badge badge-postit">' + g.articles.length + ' 篇</span>' +
+        '</div>' +
+        (top ? '<span class="score-stamp">' + top + '</span>' : '') +
+      '</div>';
+    const list = g.articles.map(a => renderSearchHit(a)).join('');
+    return '<section class="paper p-6 ' + rot + '">' + head + '<div class="space-y-3">' + list + '</div></section>';
+  }).join('');
+
+  el.innerHTML = overviewHtml + statsHtml + groupsHtml;
+}
+
+function renderSearchHit(a) {
+  const score = Number(a.matchScore || 0);
+  const scoreCls = score >= 7 ? '' : (score >= 5 ? 'score-mid' : 'score-low');
+  const topics = Array.isArray(a.topics) ? a.topics : [];
+  const topicsHtml = topics.length
+    ? '<div class="mt-1 mb-1">' + topics.slice(0, 5).map(t => '<span class="topic-chip">' + escHtml(t) + '</span>').join('') + '</div>'
+    : '';
+  const dateStr = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('zh-CN') : '';
+  const reason = a.reason ? '<div class="text-xs mt-1" style="color:#2d5da1;"><span class="font-marker mr-1">AI 判断：</span>' + escHtml(a.reason) + '</div>' : '';
+
+  return '<div class="paper-soft p-4">' +
+    '<div class="flex items-start justify-between gap-3">' +
+      '<div class="flex-1 min-w-0">' +
+        '<a href="' + escHtml(a.url) + '" target="_blank" class="font-marker text-base line-clamp-1" style="color:#2d2d2d;border-bottom:2px dashed #2d5da1;">' + escHtml(a.title) + '</a>' +
+        topicsHtml +
+        '<div class="text-xs opacity-60 mt-1">' + escHtml(dateStr) + (a.importanceScore != null ? ' · 重要性 ' + Number(a.importanceScore).toFixed(1) : '') + '</div>' +
+        '<div class="analysis-section mt-2">' + escHtml(a.summary || '') + '</div>' +
+        reason +
+      '</div>' +
+      '<span class="score-stamp ' + scoreCls + ' flex-shrink-0">' + score.toFixed(1) + '</span>' +
+    '</div>' +
+  '</div>';
+}
