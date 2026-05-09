@@ -504,30 +504,55 @@
     </div>
 
     <!-- Search Page -->
-    <div id="page-search" class="p-8 max-w-4xl mx-auto space-y-6 hidden">
-      <header class="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <h1 class="font-marker text-3xl md:text-4xl">主题搜索</h1>
-          <div class="text-sm opacity-70 mt-1">用 AI 找一段时间里和某个主题真正相关的文章 🔍</div>
-        </div>
-      </header>
+    <div id="page-search" class="hidden h-full">
+      <div class="flex flex-col h-full min-h-0">
+        <!-- Top search bar -->
+        <section class="paper tape p-6 mx-8 mt-6 flex-shrink-0">
+          <div class="flex items-end justify-between gap-3 flex-wrap mb-3">
+            <div>
+              <h1 class="font-marker text-2xl md:text-3xl">主题搜索</h1>
+              <div class="text-xs opacity-70 mt-0.5">用 AI 找一段时间里和某个主题真正相关的文章 🔍</div>
+            </div>
+          </div>
+          <div class="flex flex-col md:flex-row gap-3 md:items-center">
+            <input id="search-query" type="text" placeholder="比如：通胀、AI 算力、美债..." class="input-hand flex-1 text-base" onkeydown="if(event.key==='Enter') runSearch()" />
+            <select id="search-days" class="input-hand" style="max-width:140px;">
+              <option value="7">最近 7 天</option>
+              <option value="14">最近 14 天</option>
+              <option value="30" selected>最近 30 天</option>
+              <option value="60">最近 60 天</option>
+              <option value="90">最近 90 天</option>
+            </select>
+            <button class="btn" id="btn-search" onclick="runSearch()">🔍 搜索</button>
+          </div>
+          <div id="search-meta" class="text-xs opacity-60 mt-3">Tip: 15 分钟内相同查询走缓存。命中按公众号聚合。</div>
+        </section>
 
-      <section class="paper tape p-6">
-        <div class="flex flex-col md:flex-row gap-3 md:items-center">
-          <input id="search-query" type="text" placeholder="比如：通胀、AI 算力、美债..." class="input-hand flex-1 text-base" onkeydown="if(event.key==='Enter') runSearch()" />
-          <select id="search-days" class="input-hand" style="max-width:140px;">
-            <option value="7">最近 7 天</option>
-            <option value="14">最近 14 天</option>
-            <option value="30" selected>最近 30 天</option>
-            <option value="60">最近 60 天</option>
-            <option value="90">最近 90 天</option>
-          </select>
-          <button class="btn" id="btn-search" onclick="runSearch()">🔍 搜索</button>
-        </div>
-        <div class="text-xs opacity-60 mt-3">Tip: 结果会按公众号聚合，组间与组内都按相关度排序。15 分钟内相同查询走缓存。</div>
-      </section>
+        <!-- Below: split pane, empty until a search is run -->
+        <div id="search-split" class="flex-1 min-h-0 mt-4 mx-8 mb-6 hidden">
+          <div class="flex h-full min-h-0 paper" style="padding:0;overflow:hidden;">
+            <!-- Left: feed picker -->
+            <aside class="w-64 border-r-2 border-dashed border-ink/40 flex-shrink-0 flex flex-col overflow-hidden"
+                   style="background:linear-gradient(180deg,#fffbe0 0%,#fdfbf7 100%);">
+              <div class="px-5 pt-5 pb-3">
+                <h2 class="font-marker text-lg">命中结果</h2>
+                <div class="text-xs opacity-60 mt-0.5" id="search-left-sub"></div>
+              </div>
+              <div class="px-3 pb-4 flex-1 overflow-y-auto" id="search-feeds-panel"></div>
+            </aside>
 
-      <div id="search-result" class="space-y-6"></div>
+            <!-- Right: content -->
+            <div class="flex-1 overflow-y-auto">
+              <div class="p-8 max-w-3xl mx-auto space-y-5" id="search-content"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Placeholder when no search yet -->
+        <div id="search-empty" class="flex-1 min-h-0 flex items-center justify-center px-8 pb-8">
+          <div class="text-sm opacity-50 text-center">输入主题开始搜索 →</div>
+        </div>
+      </div>
     </div>
 
     <!-- Feeds Page -->

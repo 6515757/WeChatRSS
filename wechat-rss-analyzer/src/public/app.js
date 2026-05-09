@@ -18,7 +18,7 @@ function showPage(page) {
 
   const mainEl = document.querySelector('main.main-content');
   if (mainEl) {
-    if (page === 'articles') { mainEl.classList.add('overflow-hidden'); mainEl.classList.remove('overflow-y-auto'); }
+    if (page === 'articles' || page === 'search') { mainEl.classList.add('overflow-hidden'); mainEl.classList.remove('overflow-y-auto'); }
     else { mainEl.classList.remove('overflow-hidden'); mainEl.classList.add('overflow-y-auto'); }
   }
 
@@ -491,10 +491,19 @@ async function runSearch() {
   if (!query) { showToast('请输入搜索主题', 'error'); return; }
 
   const btn = document.getElementById('btn-search');
-  const resultEl = document.getElementById('search-result');
+  const emptyEl = document.getElementById('search-empty');
+  const splitEl = document.getElementById('search-split');
+  const feedsPanel = document.getElementById('search-feeds-panel');
+  const contentEl = document.getElementById('search-content');
+  const metaEl = document.getElementById('search-meta');
+
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner">⟳</span> 搜索中...';
-  resultEl.innerHTML = '<div class="paper p-6 text-sm opacity-70">AI 正在翻阅最近 ' + days + ' 天的文章，找和「' + escHtml(query) + '」有关的内容...</div>';
+  emptyEl.classList.add('hidden');
+  splitEl.classList.remove('hidden');
+  feedsPanel.innerHTML = '<div class="text-xs opacity-50 text-center py-8">AI 正在翻阅...</div>';
+  contentEl.innerHTML = '<div class="paper p-6 text-sm opacity-70 -rotate-1">AI 正在翻阅最近 ' + days + ' 天的文章，找和「' + escHtml(query) + '」有关的内容...</div>';
+  metaEl.textContent = '搜索中...';
   searchRunning = true;
 
   try {
@@ -510,7 +519,9 @@ async function runSearch() {
     const data = await res.json();
     renderSearchResult(data);
   } catch (e) {
-    resultEl.innerHTML = '<div class="paper p-6 text-red-500">搜索失败: ' + escHtml(e.message) + '</div>';
+    feedsPanel.innerHTML = '';
+    contentEl.innerHTML = '<div class="paper p-6 text-red-500">搜索失败: ' + escHtml(e.message) + '</div>';
+    metaEl.textContent = '';
   } finally {
     btn.disabled = false;
     btn.innerHTML = '🔍 搜索';
@@ -518,49 +529,146 @@ async function runSearch() {
   }
 }
 
+// 当前搜索数据缓存在前端（供点公众号切换）
+let _lastSearch = null;
+let _searchView = 'overview'; // 'overview' | 'all' | 'feed:<feedId>'
+
 function renderSearchResult(data) {
-  const el = document.getElementById('search-result');
-  const q = escHtml(data.query || '');
-  const statsBits = [];
-  statsBits.push('时间范围：最近 ' + data.days + ' 天');
-  statsBits.push('候选 ' + (data.searched || 0) + ' / ' + (data.totalAnalyzed || 0) + ' 篇');
-  statsBits.push('命中 ' + (data.total || 0) + ' 篇');
-  if (data.cached) statsBits.push('来自缓存');
-  if (data.prefiltered) statsBits.push('已预筛');
+  _lastSearch = data;
+  _searchView = (data.overview ? 'overview' : 'all');
 
-  const overviewHtml = data.overview
-    ? '<div class="paper postit p-6 -rotate-1"><div class="flex items-center gap-2 mb-3"><span class="font-marker text-lg">搜索报告</span><span class="text-xs opacity-60">关于「' + q + '」</span></div><div class="analysis-section" style="font-size:1.05rem;line-height:1.9;">' + escHtml(data.overview) + '</div></div>'
-    : '';
+  // Stats in top meta line
+  const metaEl = document.getElementById('search-meta');
+  const bits = [];
+  bits.push('最近 ' + data.days + ' 天');
+  bits.push('候选 ' + (data.searched || 0) + ' / ' + (data.totalAnalyzed || 0) + ' 篇');
+  bits.push('命中 ' + (data.total || 0) + ' 篇');
+  if (data.cached) bits.push('来自缓存');
+  if (data.prefiltered) bits.push('已预筛');
+  metaEl.innerHTML = '「<span class="font-marker">' + escHtml(data.query) + '</span>」 · ' + bits.join(' · ');
 
-  const statsHtml = '<div class="text-xs opacity-70 flex items-center gap-2 flex-wrap">' +
-    statsBits.map(b => '<span class="badge">' + escHtml(b) + '</span>').join('') +
-    '</div>';
+  renderSearchLeft();
+  renderSearchRight();
+}
 
-  if (!data.groups || data.groups.length === 0) {
-    el.innerHTML = overviewHtml + statsHtml +
-      '<div class="paper p-6 text-center opacity-70">没有命中的文章。换个说法，或者扩大时间范围试试？</div>';
+function renderSearchLeft() {
+  const panel = document.getElementById('search-feeds-panel');
+  const subEl = document.getElementById('search-left-sub');
+  if (!_lastSearch) { panel.innerHTML = ''; return; }
+  const data = _lastSearch;
+  subEl.textContent = data.total > 0 ? (data.total + ' 篇 · ' + data.groups.length + ' 个公众号') : '';
+
+  const items = [];
+
+  // 搜索报告入口（只在有 overview 时出现）
+  if (data.overview) {
+    const cls = _searchView === 'overview' ? 'active' : '';
+    items.push(
+      '<div class="feed-item ' + cls + '" onclick="selectSearchView(\'overview\')">' +
+        '<div class="avatar" style="background:#fff9c4;color:#2d2d2d;border-color:#2d2d2d;">📋</div>' +
+        '<span>搜索报告</span>' +
+      '</div>'
+    );
+  }
+
+  // 全部命中
+  if ((data.total || 0) > 0) {
+    const cls = _searchView === 'all' ? 'active' : '';
+    items.push(
+      '<div class="feed-item ' + cls + '" onclick="selectSearchView(\'all\')">' +
+        '<div class="avatar" style="background:#2d2d2d;">全</div>' +
+        '<span>全部命中</span>' +
+        '<span class="opacity-50 text-xs ml-auto">' + data.total + '</span>' +
+      '</div>'
+    );
+  }
+
+  // 各公众号
+  for (const g of (data.groups || [])) {
+    const key = 'feed:' + g.feedId;
+    const cls = _searchView === key ? 'active' : '';
+    const initial = (g.feedName || '·').slice(0, 1);
+    items.push(
+      '<div class="feed-item ' + cls + '" onclick="selectSearchView(\'' + escHtml(key) + '\')" title="' + escHtml(g.feedName) + '">' +
+        '<div class="avatar">' + escHtml(initial) + '</div>' +
+        '<span class="truncate" style="min-width:0;overflow:hidden;text-overflow:ellipsis;">' + escHtml(g.feedName) + '</span>' +
+        '<span class="opacity-50 text-xs ml-auto">' + g.articles.length + '</span>' +
+      '</div>'
+    );
+  }
+
+  panel.innerHTML = '<div class="space-y-1">' + items.join('') + '</div>';
+}
+
+function selectSearchView(view) {
+  _searchView = view;
+  renderSearchLeft();
+  renderSearchRight();
+  // 顶部内容滚回顶
+  const rightScroller = document.querySelector('#search-split .flex-1.overflow-y-auto');
+  if (rightScroller) rightScroller.scrollTop = 0;
+}
+
+function renderSearchRight() {
+  const el = document.getElementById('search-content');
+  if (!_lastSearch) { el.innerHTML = ''; return; }
+  const data = _lastSearch;
+
+  // Overview
+  if (_searchView === 'overview') {
+    if (!data.overview) {
+      el.innerHTML = '<div class="paper p-6 opacity-70">本次搜索没有生成综合报告。</div>';
+      return;
+    }
+    el.innerHTML =
+      '<div class="paper postit p-6 -rotate-1">' +
+        '<div class="flex items-center gap-2 mb-3">' +
+          '<span class="font-marker text-xl">搜索报告</span>' +
+          '<span class="text-xs opacity-60">关于「' + escHtml(data.query) + '」 · 最近 ' + data.days + ' 天</span>' +
+        '</div>' +
+        '<div class="analysis-section" style="font-size:1.05rem;line-height:1.9;">' + escHtml(data.overview) + '</div>' +
+        '<div class="text-xs opacity-60 mt-4 pt-3 border-t-2 border-dashed border-ink/30">' +
+          '共从 ' + (data.searched || 0) + ' 篇候选中命中 ' + (data.total || 0) + ' 篇，涉及 ' + (data.groups || []).length + ' 个公众号。' +
+          '（点左侧切换公众号查看具体文章）' +
+        '</div>' +
+      '</div>';
     return;
   }
 
-  const groupsHtml = data.groups.map((g, gi) => {
-    const top = g.articles[0] ? Number(g.articles[0].matchScore).toFixed(1) : '';
-    const rot = (gi % 2 === 0) ? '-rotate-1' : 'rotate-1';
-    const head =
-      '<div class="flex items-end justify-between gap-3 flex-wrap mb-3">' +
-        '<div class="flex items-center gap-3">' +
-          '<span class="font-marker text-xl">' + escHtml(g.feedName) + '</span>' +
-          '<span class="badge badge-postit">' + g.articles.length + ' 篇</span>' +
-        '</div>' +
-        (top ? '<span class="score-stamp">' + top + '</span>' : '') +
-      '</div>';
-    const list = g.articles.map(a => renderSearchHit(a)).join('');
-    return '<section class="paper p-6 ' + rot + '">' + head + '<div class="space-y-3">' + list + '</div></section>';
-  }).join('');
+  // 空命中
+  if (!data.groups || data.groups.length === 0) {
+    el.innerHTML = '<div class="paper p-8 text-center opacity-70">没有命中的文章。换个说法，或者扩大时间范围试试？</div>';
+    return;
+  }
 
-  el.innerHTML = overviewHtml + statsHtml + groupsHtml;
+  // 'all' 或 'feed:<id>'
+  let articles = [];
+  let headerTitle = '';
+  if (_searchView === 'all') {
+    // 跨公众号合并，按 matchScore 降序
+    const merged = [];
+    for (const g of data.groups) for (const a of g.articles) merged.push(a);
+    merged.sort((a, b) => (Number(b.matchScore) || 0) - (Number(a.matchScore) || 0));
+    articles = merged;
+    headerTitle = '全部命中';
+  } else if (_searchView.startsWith('feed:')) {
+    const fid = _searchView.slice(5);
+    const g = data.groups.find(x => x.feedId === fid);
+    articles = g ? g.articles : [];
+    headerTitle = g ? g.feedName : '未知公众号';
+  }
+
+  const head =
+    '<header class="flex items-end justify-between gap-3 flex-wrap">' +
+      '<h2 class="font-marker text-2xl">' + escHtml(headerTitle) + '</h2>' +
+      '<span class="text-xs opacity-60">共 ' + articles.length + ' 篇</span>' +
+    '</header>';
+
+  const list = articles.map(a => renderSearchHit(a, _searchView === 'all')).join('');
+  el.innerHTML = head + '<div class="space-y-3 mt-4">' + list + '</div>';
 }
 
-function renderSearchHit(a) {
+function renderSearchHit(a, showFeed) {
   const score = Number(a.matchScore || 0);
   const scoreCls = score >= 7 ? '' : (score >= 5 ? 'score-mid' : 'score-low');
   const topics = Array.isArray(a.topics) ? a.topics : [];
@@ -568,14 +676,20 @@ function renderSearchHit(a) {
     ? '<div class="mt-1 mb-1">' + topics.slice(0, 5).map(t => '<span class="topic-chip">' + escHtml(t) + '</span>').join('') + '</div>'
     : '';
   const dateStr = a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('zh-CN') : '';
+  const feedSpan = showFeed && a.feedName
+    ? '<span class="badge badge-postit mr-1">' + escHtml(a.feedName) + '</span>'
+    : '';
   const reason = a.reason ? '<div class="text-xs mt-1" style="color:#2d5da1;"><span class="font-marker mr-1">AI 判断：</span>' + escHtml(a.reason) + '</div>' : '';
 
   return '<div class="paper-soft p-4">' +
     '<div class="flex items-start justify-between gap-3">' +
       '<div class="flex-1 min-w-0">' +
         '<a href="' + escHtml(a.url) + '" target="_blank" class="font-marker text-base line-clamp-1" style="color:#2d2d2d;border-bottom:2px dashed #2d5da1;">' + escHtml(a.title) + '</a>' +
+        '<div class="flex items-center gap-2 mt-1 flex-wrap">' +
+          feedSpan +
+          '<span class="text-xs opacity-60">' + escHtml(dateStr) + (a.importanceScore != null ? ' · 重要性 ' + Number(a.importanceScore).toFixed(1) : '') + '</span>' +
+        '</div>' +
         topicsHtml +
-        '<div class="text-xs opacity-60 mt-1">' + escHtml(dateStr) + (a.importanceScore != null ? ' · 重要性 ' + Number(a.importanceScore).toFixed(1) : '') + '</div>' +
         '<div class="analysis-section mt-2">' + escHtml(a.summary || '') + '</div>' +
         reason +
       '</div>' +
