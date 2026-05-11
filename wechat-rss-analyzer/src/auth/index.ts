@@ -5,7 +5,7 @@ import { llmClient } from '../analyzer/llm-client';
 
 // 简单的 HMAC token 签发/验证
 const SECRET = process.env.AUTH_SECRET || 'wechatrss-love-secret-2026';
-const TOKEN_TTL_MS = 30 * 24 * 3600 * 1000; // 30 天
+const TOKEN_TTL_MS = 7 * 24 * 3600 * 1000; // 7 天
 const COOKIE_NAME = 'wrss_auth';
 
 function signToken(): string {
@@ -120,7 +120,7 @@ export async function registerAuth(app: FastifyInstance): Promise<void> {
       // 签发 token
       const token = signToken();
       challenges.delete(sessionId);
-      reply.header('Set-Cookie', `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`);
+      reply.header('Set-Cookie', `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 3600}`);
       return { success: true, results };
     }
 
