@@ -44,16 +44,16 @@ export function startScheduler(): void {
     }
   }, cronOpts);
 
-  // 4. 补漏抓取（10:00）
+  // 4. 补漏抓取（10:00）：对于首次 fetch 时 we-mp-rss 尚未补全正文的文章，
+  //    此时 content:encoded 通常已就绪，fetcher 会自动回填 content；
+  //    fetch 后再跑一次 analyze，处理因正文过短跳过的文章。
+  //    注意：不发邮件，避免每天收到两封。
   cron.schedule(config.cron.fetchBackfill, async () => {
     console.log('[Scheduler] Backfill fetch started ' + new Date().toISOString());
     try {
       await fetchAllFeeds();
-      const result = await analyzeUnprocessedArticles();
-      if (result.success > 0 && config.mail.user && config.mail.to) {
-        console.log('[Scheduler] Sending email for backfilled articles...');
-        await sendDailyEmail();
-      }
+      await analyzeUnprocessedArticles();
+      // 不发邮件：今天的邮件已在 09:00 发出，补漏只是把正文补齐供明天使用
     } catch (err) {
       console.error('[Scheduler] Backfill failed:', err);
     }
