@@ -155,9 +155,9 @@
     // 信的内容（初始隐藏）
     html += '<div id="letter-content" style="display:none;">';
     html += '<div style="background:#fff;border:2px solid #2d2d2d;box-shadow:6px 6px 0 0 #2d2d2d;border-radius:30px 12px 28px 14px / 14px 30px 12px 28px;padding:32px 28px;text-align:left;transform:rotate(-1deg);margin-top:24px;">';
-    html += '<div style="font-family:Kalam,sans-serif;font-size:1.3rem;font-weight:700;color:#ff4d4d;margin-bottom:16px;text-align:center;">写给宝宝的信 💌</div>';
+    html += '<div style="font-family:Kalam,sans-serif;font-size:1.3rem;font-weight:700;color:#ff4d4d;margin-bottom:16px;text-align:center;">写给雨菲宝宝的信 💌</div>';
     html += '<div style="font-family:Patrick Hand,sans-serif;font-size:1.05rem;color:#2d2d2d;line-height:2;">';
-    html += '<p>亲爱的宝宝：</p>';
+    html += '<p>亲爱的雨菲宝宝：</p>';
     html += '<p>还记得 1 月 8 号那天吗？那时候的我，大概怎么也想不到，一次普通的朋友介绍，会变成我人生里最重要的转折。</p>';
     html += '<p>第一次一起吃火锅，你笑起来的样子，让整个冬天都暖了。2 月 8 号我们确定关系，一起做了挂坠——那天我心里想的是，这个人，我想一直走下去。</p>';
     html += '<p>后来我们一起做了戒指，一起看了樱花，一起在家里涮火锅。每一个"第一次"都被我小心翼翼地记着，因为和你在一起的每一天，都值得被记住。</p>';
