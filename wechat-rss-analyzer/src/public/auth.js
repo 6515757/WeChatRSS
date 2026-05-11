@@ -29,7 +29,7 @@
     if (overlay) return;
     overlay = document.createElement('div');
     overlay.id = 'auth-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#fdfbf7;display:flex;align-items:center;justify-content:center;overflow-y:auto;padding:24px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#fdfbf7;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:48px 24px;';
     document.body.appendChild(overlay);
   }
 
