@@ -9,6 +9,7 @@ import { reportRoutes } from './routes/reports';
 import { taskRoutes } from './routes/tasks';
 import { digestRoutes } from './routes/digests';
 import { searchRoutes } from './routes/search';
+import { registerAuth, authGuard } from '../auth';
 
 export async function createServer() {
   const app = Fastify({
@@ -26,6 +27,12 @@ export async function createServer() {
 
   // CORS
   await app.register(cors, { origin: true });
+
+  // 认证路由（不受守卫保护）
+  await registerAuth(app);
+
+  // API 守卫
+  app.addHook('onRequest', authGuard);
 
   // 静态文件（UI）
   await app.register(staticPlugin, {
