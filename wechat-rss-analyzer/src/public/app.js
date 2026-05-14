@@ -32,6 +32,7 @@ function showPage(page) {
 function startStatusPoll() { stopStatusPoll(); statusPollTimer = setInterval(refreshStatus, 5000); }
 function stopStatusPoll() { if (statusPollTimer) { clearInterval(statusPollTimer); statusPollTimer = null; } }
 async function refreshStatus() {
+  try { const wx = await get("/tasks/wx-session"); renderWxSession(wx); } catch(e) {}
   try { const data = await get('/tasks/status'); renderPipelineProgress(data.pipeline); } catch (e) {}
 }
 
@@ -696,4 +697,36 @@ function renderSearchHit(a, showFeed) {
       '<span class="score-stamp ' + scoreCls + ' flex-shrink-0">' + score.toFixed(1) + '</span>' +
     '</div>' +
   '</div>';
+}
+
+function renderWxSession(wx) {
+  var card = document.getElementById("wx-session-card");
+  var badge = document.getElementById("wx-session-badge");
+  var detail = document.getElementById("wx-session-detail");
+  if (!card || !badge || !detail) return;
+  card.style.display = "";
+  if (!wx || !wx.valid || wx.remainingSeconds <= 0) {
+    badge.className = "badge badge-fail";
+    badge.textContent = "已过期";
+    detail.textContent = "请去公众号管理重新扫码授权";
+    card.style.borderColor = "#ff4d4d";
+    return;
+  }
+  var days = wx.remainingDays;
+  if (days <= 1) {
+    badge.className = "badge badge-fail";
+    badge.textContent = "即将过期";
+    detail.textContent = "剩余不到 1 天，到期: " + (wx.expiryTime || "");
+    card.style.borderColor = "#ff4d4d";
+  } else if (days <= 3) {
+    badge.className = "badge badge-postit";
+    badge.textContent = "剩余 " + days + " 天";
+    detail.textContent = "到期: " + (wx.expiryTime || "");
+    card.style.borderColor = "#c37400";
+  } else {
+    badge.className = "badge badge-ok";
+    badge.textContent = "正常 · 剩余 " + days + " 天";
+    detail.textContent = "到期: " + (wx.expiryTime || "");
+    card.style.borderColor = "#2d2d2d";
+  }
 }

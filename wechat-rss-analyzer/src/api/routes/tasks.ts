@@ -4,6 +4,7 @@ import { fetchAllFeeds, fetchFeed } from '../../fetcher';
 import { analyzeUnprocessedArticles, analyzeArticle } from '../../analyzer/analyzer';
 import { sendDailyEmail, sendAllAnalyzedEmail } from '../../mailer';
 import { refreshAllMps, syncFeedsFromWeMpRss } from '../../sources/wemp-refresh';
+import { getWxSessionStatus } from '../../sources/wemp-status';
 import { getDb } from '../../db';
 import { articles } from '../../db/schema';
 
@@ -90,6 +91,11 @@ const taskStatus = {
 export async function taskRoutes(app: FastifyInstance): Promise<void> {
   // 查看任务状态
   app.get('/tasks/status', async () => taskStatus);
+
+  // 微信 session 状态
+  app.get('/tasks/wx-session', async () => {
+    return await getWxSessionStatus();
+  });
 
   // 手动触发 we-mp-rss 刷新
   app.post('/tasks/refresh', async (req, reply) => {

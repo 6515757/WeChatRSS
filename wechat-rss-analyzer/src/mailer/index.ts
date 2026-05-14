@@ -5,6 +5,7 @@ import { getDb, saveDatabaseSync } from '../db';
 import { articles, analyses, feeds, emailDigests, type NewEmailDigest } from '../db/schema';
 import { config } from '../config';
 import { buildEmailHtml } from './template';
+import { getWxSessionStatus } from '../sources/wemp-status';
 
 const transporter = nodemailer.createTransport({
   host: config.mail.host,
@@ -91,7 +92,25 @@ async function sendAndArchive(options: {
   }
 
   const feedGroups = groupByFeed(articleList);
-  const html = buildEmailHtml(dateStr, articleList.length, feedGroups.length, feedGroups);
+  let html = buildEmailHtml(dateStr, articleList.length, feedGroups.length, feedGroups);
+
+  // 检查微信 session，快过期时在邮件顶部加警告
+  try {
+    const wxStatus = await getWxSessionStatus();
+    if (wxStatus.remainingSeconds > 0 && wxStatus.remainingSeconds < 2 * 86400) {
+      const warnHtml = `<div style="background:#ff4d4d;color:#fff;padding:12px 20px;font-size:14px;font-weight:600;text-align:center;border-radius:8px;margin:16px 20px 0;">⚠️ 微信登录 session 将在 ${wxStatus.remainingDays > 0 ? wxStatus.remainingDays + ' 天' : '数小时'}后过期（${wxStatus.expiryTime || ''}），请尽快去 <a href="https://rss.mustardnet.xyz" style="color:#fff;text-decoration:underline;">公众号管理</a> 重新扫码授权！</div>`;
+      // 插入到 <!-- Content --> 之前
+      html = html.replace('<!-- Content -->', warnHtml + '\n  <!-- Content -->');
+      // 如果模板里没有 <!-- Content --> 注释，就插到 body 开头
+      if (!html.includes(warnHtml)) {
+        html = html.replace('<body', '<body').replace('</body>', warnHtml + '</body>');
+      }
+    }
+  } catch (err) {
+    // 查不到就不加，不影响发邮件
+    console.warn('[Mailer] 检查微信 session 状态失败:', err);
+  }
+
   const subject = `微信公众号每日摘要 - ${dateStr} (${articleList.length}篇)`;
 
   await transporter.sendMail({
