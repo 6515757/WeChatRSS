@@ -141,6 +141,13 @@ export function authGuard(req: FastifyRequest, reply: FastifyReply, done: () => 
     return;
   }
 
+  // 内部调用绕过（用于 cron / 手动触发）
+  const internalKey = req.headers['x-internal-key'];
+  if (internalKey === (process.env.AUTH_SECRET || 'wechatrss-love-secret-2026')) {
+    done();
+    return;
+  }
+
   const token = parseCookie(req);
   if (token && verifyToken(token)) {
     done();
